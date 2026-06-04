@@ -1,0 +1,34 @@
+MongoDB has been deployed.
+
+Release name:
+  {{ .Release.Name }}
+
+Service:
+  {{ include "mongodb.fullname" . }}:{{ .Values.service.port }}
+
+{{- if .Values.cluster.enabled }}
+Replica Set mode is enabled.
+
+Replica set name:
+  {{ .Values.cluster.replicaSetName }}
+
+Members ({{ .Values.cluster.members }}):
+  {{ include "mongodb.fullname" . }}-0 through {{ include "mongodb.fullname" . }}-{{ sub ( .Values.cluster.members | int) 1 }}
+
+The {{ include "mongodb.fullname" . }}-replica-init hook Job initializes the replica set
+with rs.initiate() after all pods are ready.
+
+Check replica set status:
+  kubectl exec -n {{ .Release.Namespace }} {{ include "mongodb.fullname" . }}-0 -- mongosh -u "$MONGO_INITDB_ROOT_USERNAME" -p "$MONGO_INITDB_ROOT_PASSWORD" --authenticationDatabase admin --eval "rs.status()"
+{{- end }}
+
+{{- if not (eq .Values.auth.existingSecret "") }}
+Using existing secret: {{ .Values.auth.existingSecret }}
+{{- else }}
+Secret created: {{ include "mongodb.secretName" . }}
+Get root password:
+  kubectl get secret {{ include "mongodb.secretName" . }} -o jsonpath="{.data.MONGO_INITDB_ROOT_PASSWORD}" | base64 -d
+{{- end }}
+
+Connect from inside the cluster:
+  mongosh -u {{ .Values.auth.rootUser }} -p "$MONGO_INITDB_ROOT_PASSWORD" --host {{ include "mongodb.fullname" . }} --port {{ .Values.service.port }}

@@ -1,0 +1,68 @@
+{{- if .Values.ingress.enabled }}
+{{- if .Values.gateway.enabled }}
+{{- fail "ingress.enabled and gateway.enabled are mutually exclusive — enable only one" }}
+{{- end }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "sentry.fullname" . }}
+  labels:
+    {{- include "sentry.labels" . | nindent 4 }}
+    {{- with .Values.ingress.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with .Values.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if .Values.ingress.className }}
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- end }}
+  rules:
+    {{- $hosts := list .Values.ingress.hostname }}
+    {{- range .Values.ingress.additionalHostNames }}
+    {{- $hosts = append $hosts . }}
+    {{- end }}
+    {{- range $hosts }}
+    - host: {{ . }}
+      http:
+        paths:
+          # SDK event ingestion → relay
+          - path: /api/[1-9][0-9]*/(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: {{ include "sentry.fullname" $ }}-relay
+                port:
+                  number: {{ $.Values.relay.port }}
+          # Legacy store endpoint → relay
+          - path: /api/store
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: {{ include "sentry.fullname" $ }}-relay
+                port:
+                  number: {{ $.Values.relay.port }}
+          # Relay-to-relay communication → relay
+          - path: /api/0/relays/(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: {{ include "sentry.fullname" $ }}-relay
+                port:
+                  number: {{ $.Values.relay.port }}
+          # Everything else → web
+          - path: /
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: {{ include "sentry.fullname" $ }}
+                port:
+                  number: {{ $.Values.service.port }}
+    {{- end }}
+  {{- with .Values.ingress.tls }}
+  tls:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+{{- end }}

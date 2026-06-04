@@ -1,0 +1,170 @@
+{{- if .Values.web.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "sentry.fullname" . }}-web
+  labels:
+    {{- include "sentry.webSelectorLabels" . | nindent 4 }}
+    {{- include "sentry.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.web.replicas }}
+  selector:
+    matchLabels:
+      {{- include "sentry.webSelectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "sentry.webSelectorLabels" . | nindent 8 }}
+        {{- with .Values.web.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.web.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      automountServiceAccountToken: false
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: sentry-web
+          image: {{ include "sentry.webImage" . }}
+          imagePullPolicy: {{ .Values.image.sentry.pullPolicy }}
+          command: ["sentry", "run", "web"]
+          ports:
+            - name: http
+              containerPort: {{ .Values.web.port }}
+              protocol: TCP
+          env:
+            - name: SENTRY_WEB_HOST
+              value: "0.0.0.0"
+            - name: SENTRY_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "sentry.secretName" . }}
+                  key: SENTRY_SECRET_KEY
+            - name: SENTRY_DB_NAME
+              value: {{ .Values.postgres.database | quote }}
+            - name: SENTRY_DB_USER
+              value: {{ .Values.postgres.user | quote }}
+            - name: SENTRY_DB_PASSWORD
+            {{- if .Values.postgres.password }}
+              value: {{ .Values.postgres.password | quote }}
+            {{- else if .Values.postgres.existingSecret }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.postgres.existingSecret }}
+                  key: {{ .Values.postgres.existingSecretKey | default "password" }}
+            {{- else }}
+              value: ""
+            {{- end }}
+            - name: SENTRY_POSTGRES_HOST
+              value: {{ .Values.postgres.host | quote }}
+            - name: SENTRY_POSTGRES_PORT
+              value: {{ .Values.postgres.port | quote }}
+            - name: SENTRY_REDIS_HOST
+              value: {{ .Values.redis.host | quote }}
+            - name: SENTRY_REDIS_PORT
+              value: {{ .Values.redis.port | quote }}
+            - name: SENTRY_REDIS_PASSWORD
+            {{- if .Values.redis.password }}
+              value: {{ .Values.redis.password | quote }}
+            {{- else if .Values.redis.existingSecret }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.redis.existingSecret }}
+                  key: {{ .Values.redis.existingSecretKey | default "password" }}
+            {{- else }}
+              value: ""
+            {{- end }}
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              value: {{ .Values.kafka.bootstrapServers | quote }}
+            {{- if .Values.snuba.api.enabled }}
+            - name: SNUBA_HOST
+              value: "http://{{ include "sentry.fullname" . }}-snuba-api.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.snuba.api.port }}"
+            {{- end }}
+            {{- if .Values.relay.enabled }}
+            - name: SENTRY_RELAY_HOST
+              value: {{ include "sentry.fullname" . }}-relay
+            - name: SENTRY_RELAY_PORT
+              value: {{ .Values.relay.port | quote }}
+            {{- end }}
+            - name: SENTRY_SYSTEM_URL
+              value: {{ .Values.system.url | quote }}
+            - name: SENTRY_ADMIN_EMAIL
+              value: {{ .Values.system.adminEmail | quote }}
+            {{- if .Values.filestore.backend }}
+            - name: SENTRY_FILESTORE
+              value: {{ .Values.filestore.backend | quote }}
+            {{- end }}
+            {{- if eq .Values.filestore.backend "filesystem" }}
+            - name: SENTRY_FILESTORE_DIR
+              value: {{ .Values.filestore.filesystem.path | quote }}
+            {{- end }}
+            {{- if eq .Values.filestore.backend "s3" }}
+            {{- if .Values.filestore.s3.accessKey }}
+            - name: SENTRY_FILESTORE_S3_ACCESS_KEY
+              value: {{ .Values.filestore.s3.accessKey | quote }}
+            {{- end }}
+            {{- if .Values.filestore.s3.secretKey }}
+            - name: SENTRY_FILESTORE_S3_SECRET_KEY
+              value: {{ .Values.filestore.s3.secretKey | quote }}
+            {{- end }}
+            - name: SENTRY_FILESTORE_S3_BUCKET_NAME
+              value: {{ .Values.filestore.s3.bucketName | quote }}
+            {{- if .Values.filestore.s3.endpointUrl }}
+            - name: SENTRY_FILESTORE_S3_ENDPOINT_URL
+              value: {{ .Values.filestore.s3.endpointUrl | quote }}
+            {{- end }}
+            - name: SENTRY_FILESTORE_S3_REGION
+              value: {{ .Values.filestore.s3.region | quote }}
+            {{- end }}
+            - name: SENTRY_WEB_WORKERS
+              value: "8"
+            {{- with .Values.web.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          volumeMounts:
+            - name: sentry-conf
+              mountPath: /etc/sentry
+              readOnly: true
+            {{- if eq .Values.filestore.backend "filesystem" }}
+            {{- if .Values.filestore.filesystem.persistence.enabled }}
+            - name: filestore
+              mountPath: {{ .Values.filestore.filesystem.path }}
+            {{- end }}
+            {{- end }}
+          {{- with .Values.web.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      volumes:
+        - name: sentry-conf
+          configMap:
+            name: {{ include "sentry.fullname" . }}-sentry
+        {{- if eq .Values.filestore.backend "filesystem" }}
+        {{- if .Values.filestore.filesystem.persistence.enabled }}
+        - name: filestore
+          persistentVolumeClaim:
+            {{- if .Values.filestore.filesystem.persistence.existingClaim }}
+            claimName: {{ .Values.filestore.filesystem.persistence.existingClaim }}
+            {{- else }}
+            claimName: {{ include "sentry.fullname" . }}-data
+            {{- end }}
+        {{- end }}
+        {{- end }}
+      {{- with .Values.web.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.web.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.web.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

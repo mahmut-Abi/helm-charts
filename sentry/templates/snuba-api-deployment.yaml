@@ -1,0 +1,176 @@
+{{- if .Values.snuba.api.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "sentry.fullname" . }}-snuba-api
+  labels:
+    {{- include "sentry.snubaApiSelectorLabels" . | nindent 4 }}
+    {{- include "sentry.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.snuba.api.replicas }}
+  selector:
+    matchLabels:
+      {{- include "sentry.snubaApiSelectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "sentry.snubaApiSelectorLabels" . | nindent 8 }}
+        {{- with .Values.snuba.api.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.snuba.api.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      automountServiceAccountToken: false
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      initContainers:
+        - name: create-clickhouse-db
+          image: {{ include "sentry.snubaImage" . }}
+          imagePullPolicy: {{ .Values.image.snuba.pullPolicy }}
+          command:
+            - python
+            - -c
+            - |
+              from clickhouse_driver import Client
+              from clickhouse_driver.errors import ServerException
+              import sys
+
+              c = Client(
+                  host="{{ .Values.clickhouse.host }}",
+                  port={{ .Values.clickhouse.tcpPort }},
+                  user="{{ .Values.clickhouse.user }}",
+                  password="{{ .Values.clickhouse.password }}",
+              )
+              db = "{{ .Values.clickhouse.database }}"
+
+              try:
+                  c.execute(f"CREATE DATABASE IF NOT EXISTS {db} ON CLUSTER 'default'")
+                  print(f"Database '{db}' created on cluster 'default'")
+              except ServerException:
+                  c.execute(f"CREATE DATABASE IF NOT EXISTS {db}")
+                  print(f"Database '{db}' created (standalone)")
+
+              result = c.execute(f"SELECT 1 FROM system.databases WHERE name = '{db}'")
+              if not result:
+                  print(f"ERROR: Failed to create database '{db}'. Check that ClickHouse user '{{ .Values.clickhouse.user }}' has CREATE DATABASE permission.", file=sys.stderr)
+                  sys.exit(1)
+              print(f"Database '{db}' ready")
+        - name: snuba-migrate
+          image: {{ include "sentry.snubaImage" . }}
+          imagePullPolicy: {{ .Values.image.snuba.pullPolicy }}
+          command: ["snuba", "migrations", "migrate", "--force"]
+          env:
+            - name: SNUBA_SETTINGS
+              value: /etc/snuba/settings.py
+            - name: CLICKHOUSE_HOST
+              value: {{ .Values.clickhouse.host | quote }}
+            - name: CLICKHOUSE_HTTP_PORT
+              value: {{ .Values.clickhouse.httpPort | quote }}
+            - name: CLICKHOUSE_PORT
+              value: {{ .Values.clickhouse.tcpPort | quote }}
+            - name: CLICKHOUSE_DB
+              value: {{ .Values.clickhouse.database | quote }}
+            - name: CLICKHOUSE_DATABASE
+              value: {{ .Values.clickhouse.database | quote }}
+            - name: CLICKHOUSE_USER
+              value: {{ .Values.clickhouse.user | quote }}
+            - name: CLICKHOUSE_PASSWORD
+            {{- if .Values.clickhouse.password }}
+              value: {{ .Values.clickhouse.password | quote }}
+            {{- else if .Values.clickhouse.existingSecret }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.clickhouse.existingSecret }}
+                  key: {{ .Values.clickhouse.existingSecretKey | default "password" }}
+            {{- else }}
+              value: ""
+            {{- end }}
+          volumeMounts:
+            - name: snuba-conf
+              mountPath: /etc/snuba
+              readOnly: true
+      containers:
+        - name: snuba-api
+          image: {{ include "sentry.snubaImage" . }}
+          imagePullPolicy: {{ .Values.image.snuba.pullPolicy }}
+          command: ["snuba", "api"]
+          ports:
+            - name: http
+              containerPort: {{ .Values.snuba.api.port }}
+              protocol: TCP
+          env:
+            - name: SNUBA_SETTINGS
+              value: /etc/snuba/settings.py
+            - name: CLICKHOUSE_HOST
+              value: {{ .Values.clickhouse.host | quote }}
+            - name: CLICKHOUSE_HTTP_PORT
+              value: {{ .Values.clickhouse.httpPort | quote }}
+            - name: CLICKHOUSE_PORT
+              value: {{ .Values.clickhouse.tcpPort | quote }}
+            - name: CLICKHOUSE_DB
+              value: {{ .Values.clickhouse.database | quote }}
+            - name: CLICKHOUSE_DATABASE
+              value: {{ .Values.clickhouse.database | quote }}
+            - name: CLICKHOUSE_USER
+              value: {{ .Values.clickhouse.user | quote }}
+            - name: CLICKHOUSE_PASSWORD
+            {{- if .Values.clickhouse.password }}
+              value: {{ .Values.clickhouse.password | quote }}
+            {{- else if .Values.clickhouse.existingSecret }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.clickhouse.existingSecret }}
+                  key: {{ .Values.clickhouse.existingSecretKey | default "password" }}
+            {{- else }}
+              value: ""
+            {{- end }}
+            - name: REDIS_HOST
+              value: {{ .Values.redis.host | quote }}
+            - name: REDIS_PORT
+              value: {{ .Values.redis.port | quote }}
+            - name: REDIS_PASSWORD
+            {{- if .Values.redis.password }}
+              value: {{ .Values.redis.password | quote }}
+            {{- else if .Values.redis.existingSecret }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.redis.existingSecret }}
+                  key: {{ .Values.redis.existingSecretKey | default "password" }}
+            {{- else }}
+              value: ""
+            {{- end }}
+            - name: DEFAULT_BROKERS
+              value: "{{ .Values.kafka.bootstrapServers }}"
+            {{- with .Values.snuba.api.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          volumeMounts:
+            - name: snuba-conf
+              mountPath: /etc/snuba
+              readOnly: true
+          {{- with .Values.snuba.api.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      volumes:
+        - name: snuba-conf
+          configMap:
+            name: {{ include "sentry.fullname" . }}-snuba
+      {{- with .Values.snuba.api.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.snuba.api.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.snuba.api.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

@@ -1,0 +1,186 @@
+# Default values for Kafka Helm chart.
+
+image:
+  kafka:
+    repository: apache/kafka
+    tag: "4.3.0"
+    pullPolicy: IfNotPresent
+  busybox:
+    repository: busybox
+    tag: "1.36"
+    pullPolicy: IfNotPresent
+  kafkaUi:
+    repository: provectuslabs/kafka-ui
+    tag: "latest"
+    pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+# Number of Kafka broker replicas. Must be >= 1.
+# For KRaft quorum, use an odd number (3, 5, ...).
+replicas: 3
+
+# SASL authentication configuration.
+# When enabled, SASL/PLAIN is used for inter-broker and client communication.
+auth:
+  enabled: false
+  # clientUsers is a list of user:password pairs for client access.
+  # Each user gets a SCRAM-SHA-256 credential.
+  clientUsers: []
+  # - user: admin
+  #   password: admin-secret
+  # interBrokerUser and interBrokerPassword for inter-broker communication.
+  interBrokerUser: kafka
+  # interBrokerPassword: ""
+  interBrokerPassword: ""
+  # Set this to use a pre-created Secret instead of rendering secret.yaml.
+  # The Secret should contain keys matching the SASL credentials.
+  existingSecret: ""
+
+# KRaft-specific settings.
+kraft:
+  # Port used for controller-to-controller and broker-to-controller communication.
+  controllerPort: 9093
+  # Metadata log directory (stores KRaft metadata). Defaults to the first log directory.
+  metadataLogDir: ""
+
+# Service configuration.
+service:
+  # External port for client connections.
+  externalPort: 9092
+  # Internal (headless) port for inter-broker communication.
+  internalPort: 9094
+  # NodePort to expose Kafka outside the cluster. Set to 0 to disable.
+  nodePort: 0
+
+# Persistence configuration.
+persistence:
+  enabled: true
+  # Storage size for Kafka log data.
+  size: 50Gi
+  # StorageClass name. Leave empty to use the default StorageClass.
+  storageClass: ""
+  annotations: {}
+  accessModes:
+    - ReadWriteOnce
+  # Separate volume for KRaft metadata log. If disabled, metadata is stored on the data volume.
+  kraftDedicated: false
+  # Storage size for dedicated KRaft metadata volume.
+  kraftSize: 10Gi
+
+# Volume permissions init container (for fixing PVC ownership).
+volumePermissions:
+  enabled: false
+  securityContext:
+    runAsUser: 0
+    runAsGroup: 0
+    runAsNonRoot: false
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
+      add:
+        - CHOWN
+        - FOWNER
+        - DAC_OVERRIDE
+    seccompProfile:
+      type: RuntimeDefault
+
+resources:
+  requests:
+    cpu: 500m
+    memory: 1Gi
+  limits:
+    cpu: 2
+    memory: 4Gi
+
+# Kafka JVM heap options.
+# KAFKA_HEAP_OPTS overrides the default heap settings.
+heapOpts: "-Xmx2G -Xms1G"
+
+# Maximum message size in bytes that Kafka will accept.
+# Sentry relay can produce large envelopes (3MB+), so default is 10MB.
+maxMessageBytes: "10485760"
+
+# Additional Kafka server.properties entries.
+# Will be appended to the generated configuration.
+extraServerProperties: {}
+
+readinessProbe:
+  enabled: true
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 6
+
+livenessProbe:
+  enabled: true
+  initialDelaySeconds: 60
+  periodSeconds: 20
+  timeoutSeconds: 5
+  failureThreshold: 6
+
+podSecurityContext:
+  fsGroup: 1000
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  seccompProfile:
+    type: RuntimeDefault
+
+podAnnotations: {}
+podLabels: {}
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+updateStrategy:
+  type: RollingUpdate
+
+terminationGracePeriodSeconds: 60
+
+# Kafka UI (Provectus) — optional web UI for browsing Kafka topics and messages.
+kafkaUi:
+  enabled: false
+  replicas: 1
+  service:
+    type: ClusterIP
+    port: 8080
+    annotations: {}
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  podAnnotations: {}
+  podLabels: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  extraEnv: []
+  # Ingress configuration. Requires ingress.enabled=true.
+  ingress:
+    enabled: false
+    className: nginx
+    hostname: ""
+    labels: {}
+    annotations: {}
+    tls: []
+  # Gateway API (HTTPRoute). Requires gateway.enabled=true.
+  # Ingress and gateway are mutually exclusive.
+  gateway:
+    enabled: false
+    gatewayName: ""
+    gatewayNamespace: ""
+    hostname: ""

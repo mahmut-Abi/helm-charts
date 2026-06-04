@@ -1,0 +1,25 @@
+{{- if .Values.relay.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "sentry.fullname" . }}-relay
+  labels:
+    {{- include "sentry.labels" . | nindent 4 }}
+data:
+  config.yml: |
+    relay:
+      mode: managed
+      upstream: "http://{{ include "sentry.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.service.port }}"
+      host: 0.0.0.0
+      port: {{ .Values.relay.port }}
+    http:
+      timeout: 120
+    processing:
+      enabled: true
+      kafka_config:
+        - name: bootstrap.servers
+          value: "{{ .Values.kafka.bootstrapServers }}"
+        - name: message.max.bytes
+          value: "10485760"
+      redis: "redis://{{ if .Values.redis.password }}:{{ .Values.redis.password }}@{{ end }}{{ .Values.redis.host }}:{{ .Values.redis.port }}/1"
+{{- end }}

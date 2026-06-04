@@ -1,0 +1,6 @@
+apiVersion: v2
+name: kafka
+description: A Helm chart for deploying Apache Kafka in KRaft mode without ZooKeeper.
+type: application
+version: 0.1.2
+appVersion: "4.3.0"

@@ -1,0 +1,13 @@
+{{- if .Values.cluster.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "postgres.fullname" . }}
+  labels:
+    {{- include "postgres.labels" . | nindent 4 }}
+spec:
+  minAvailable: {{ sub (int .Values.cluster.replicas) 1 }}
+  selector:
+    matchLabels:
+      {{- include "postgres.selectorLabels" . | nindent 6 }}
+{{- end }}

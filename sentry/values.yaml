@@ -1,0 +1,311 @@
+image:
+  sentry:
+    repository: ghcr.io/getsentry/sentry
+    tag: "26.5.0"
+    pullPolicy: IfNotPresent
+  relay:
+    repository: ghcr.io/getsentry/relay
+    tag: "26.5.0"
+    pullPolicy: IfNotPresent
+  snuba:
+    repository: ghcr.io/getsentry/snuba
+    tag: "26.5.0"
+    pullPolicy: IfNotPresent
+  taskbroker:
+    repository: ghcr.io/getsentry/taskbroker
+    tag: "26.5.0"
+    pullPolicy: IfNotPresent
+  # Kafka image used by the topic-creation init container.
+  kafka:
+    repository: apache/kafka
+    tag: "3.9.0"
+    pullPolicy: IfNotPresent
+  # Busybox image used by the relay init container.
+  busybox:
+    repository: busybox
+    tag: "1.36"
+    pullPolicy: IfNotPresent
+  # Postgres image used by upgrade job init container.
+  postgres:
+    repository: postgres
+    tag: "16.3"
+    pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+# Sentry secret key. Required. Auto-generated if not set.
+auth:
+  # SENTRY_SECRET_KEY for Django. Auto-generated if not set.
+  secretKey: ""
+  # Set this to use a pre-created Secret instead of rendering secret.yaml.
+  existingSecret: ""
+
+# Admin user configuration. Used to create the initial superuser.
+user:
+  email: admin@sentry.local
+  # password: "" -- must be set to create the admin user
+  password: ""
+
+# PostgreSQL connection. Point to an existing PostgreSQL instance.
+postgres:
+  host: ""
+  port: 5432
+  database: sentry
+  user: postgres
+  password: ""
+  existingSecret: ""
+  existingSecretKey: ""
+
+# Redis connection. Point to an existing Redis instance.
+redis:
+  host: ""
+  port: 6379
+  password: ""
+  existingSecret: ""
+  existingSecretKey: ""
+
+# Kafka connection. Point to an existing Kafka cluster.
+kafka:
+  bootstrapServers: ""
+  # Auto-create Kafka topics before snuba-consumer starts.
+  autoCreateTopics: true
+  # Kafka topics that snuba expects. Created by an init container when autoCreateTopics is true.
+  topics:
+    - events
+    - group-attributes
+
+# ClickHouse connection for Snuba. Point to an existing ClickHouse instance.
+clickhouse:
+  host: ""
+  httpPort: 8123
+  tcpPort: 9000
+  database: default
+  user: default
+  password: ""
+  existingSecret: ""
+  existingSecretKey: ""
+  # Set to true when ClickHouse is a single node (no ON CLUSTER needed).
+  singleNode: false
+
+# Filestore for uploaded files (artifacts, release files).
+filestore:
+  backend: filesystem  # filesystem, s3, or gcs
+  filesystem:
+    path: /var/lib/sentry/files
+    persistence:
+      enabled: true
+      size: 10Gi
+      accessMode: ReadWriteMany
+      storageClass: ""
+      existingClaim: ""
+      annotations: {}
+  s3:
+    accessKey: ""
+    secretKey: ""
+    bucketName: ""
+    endpointUrl: ""
+    region: us-east-1
+    existingSecret: ""
+
+# Sentry Web (Django + React frontend).
+web:
+  enabled: true
+  image:
+    repository: ""
+    tag: ""
+  replicas: 2
+  port: 9000
+  resources:
+    requests:
+      cpu: 500m
+      memory: 2Gi
+    limits:
+      cpu: 4
+      memory: 4Gi
+  podAnnotations: {}
+  podLabels: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  extraEnv: []
+
+# Sentry Worker (Celery worker for async task processing).
+worker:
+  enabled: true
+  image:
+    repository: ""
+    tag: ""
+  replicas: 2
+  concurrency: 8
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: 2
+      memory: 2Gi
+  podAnnotations: {}
+  podLabels: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  extraEnv: []
+
+# Sentry Cron (Celery beat for scheduled tasks). Only 1 replica.
+cron:
+  enabled: true
+  replicas: 1
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      cpu: 1
+      memory: 1Gi
+  podAnnotations: {}
+  podLabels: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  extraEnv: []
+
+# Relay (event ingestion proxy — receives events from Sentry SDKs).
+relay:
+  enabled: true
+  image:
+    repository: ""
+    tag: ""
+  replicas: 2
+  port: 3000
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      cpu: 2
+      memory: 2Gi
+  podAnnotations: {}
+  podLabels: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  extraEnv: []
+
+# Snuba (ClickHouse query service for event search and aggregation).
+snuba:
+  image:
+    repository: ""
+    tag: ""
+  api:
+    enabled: true
+    replicas: 2
+    port: 1218
+    resources:
+      requests:
+        cpu: 200m
+        memory: 512Mi
+      limits:
+        cpu: 2
+        memory: 2Gi
+    podAnnotations: {}
+    podLabels: {}
+    nodeSelector: {}
+    tolerations: []
+    affinity: {}
+    extraEnv: []
+  consumer:
+    enabled: true
+    replicas: 2
+    resources:
+      requests:
+        cpu: 200m
+        memory: 512Mi
+      limits:
+        cpu: 2
+        memory: 2Gi
+    podAnnotations: {}
+    podLabels: {}
+    nodeSelector: {}
+    tolerations: []
+    affinity: {}
+    extraEnv: []
+
+# System settings.
+system:
+  # Public URL of the Sentry instance (used for links in emails, etc.).
+  url: "http://localhost:9000"
+  # Admin email for system notifications.
+  adminEmail: "admin@localhost"
+
+service:
+  type: ClusterIP
+  port: 9000
+  annotations: {}
+
+# Ingress (standard Kubernetes Ingress). Mutually exclusive with gateway.
+ingress:
+  enabled: false
+  className: nginx
+  hostname: ""
+  # Additional hostnames to include in the same Ingress.
+  additionalHostNames: []
+  # Extra labels on the Ingress resource.
+  labels: {}
+  # Annotations passed to the Ingress. Defaults are tuned for nginx.
+  annotations:
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/proxy-buffers-number: "4"
+    nginx.ingress.kubernetes.io/proxy-buffer-size: "128k"
+    nginx.ingress.kubernetes.io/proxy-busy-buffers-size: "256k"
+    nginx.ingress.kubernetes.io/proxy-body-size: "100m"
+  tls: []
+  #  - secretName: sentry-tls
+  #    hosts:
+  #      - sentry.example.com
+
+# Gateway API (HTTPRoute). Mutually exclusive with ingress.
+gateway:
+  enabled: false
+  # The Gateway name to attach HTTPRoutes to.
+  gatewayName: ""
+  # Gateway namespace. Defaults to the release namespace.
+  gatewayNamespace: ""
+  hostname: ""
+
+# Taskbroker (gRPC task broker for taskworker).
+taskbroker:
+  enabled: true
+  replicas: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+  podAnnotations: {}
+  podLabels: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  extraEnv: []
+
+# Ingest consumer — reads from ingest-events Kafka topic, processes events into PostgreSQL.
+ingestConsumer:
+  enabled: true
+  replicas: 1
+  resources:
+    requests:
+      cpu: 200m
+      memory: 384Mi
+    limits:
+      cpu: 500m
+      memory: 768Mi
+  podAnnotations: {}
+  podLabels: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  extraEnv: []

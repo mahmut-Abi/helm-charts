@@ -1,0 +1,22 @@
+OpenTelemetry Collector has been deployed.
+
+Release name:
+  {{ .Release.Name }}
+
+OTLP gRPC endpoint:
+  {{ include "otel.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.service.otlpGrpcPort }}
+
+OTLP HTTP endpoint:
+  {{ include "otel.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.service.otlpHttpPort }}
+
+Prometheus exporter:
+  {{ include "otel.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.service.prometheusExportPort }}
+
+Check collector health:
+  kubectl port-forward -n {{ .Release.Namespace }} svc/{{ include "otel.fullname" . }} {{ .Values.service.healthCheckPort }}:{{ .Values.service.healthCheckPort }}
+  curl http://localhost:{{ .Values.service.healthCheckPort }}
+
+{{- if not .Values.config.exporters.otlp.endpoint }}
+WARNING: config.exporters.otlp.endpoint is empty. Set it to your backend endpoint
+(e.g., jaeger, tempo, or another collector) to export telemetry data.
+{{- end }}

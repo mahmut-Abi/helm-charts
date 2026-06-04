@@ -1,0 +1,34 @@
+MySQL has been deployed.
+
+Release name:
+  {{ .Release.Name }}
+
+Service (read-write):
+  {{ include "mysql.fullname" . }}:{{ .Values.service.port }}
+
+{{- if .Values.cluster.enabled }}
+Cluster mode is enabled.
+
+Primary pod:
+  {{ include "mysql.primaryFullname" . }}-0
+
+Replica pods ({{ include "mysql.readReplicaCount" . }}):
+  {{ include "mysql.replicaFullname" . }}-0 through {{ include "mysql.replicaFullname" . }}-{{ sub (include "mysql.readReplicaCount" . | int) 1 }}
+
+Primary DNS:
+  {{ include "mysql.primaryFullname" . }}-0.{{ include "mysql.headlessServiceName" . }}.{{ .Release.Namespace }}.svc.cluster.local
+
+Check replication status:
+  kubectl exec -n {{ .Release.Namespace }} {{ include "mysql.primaryFullname" . }}-0 -- mysql -u root -p"$MYSQL_ROOT_PASSWORD" -e "SHOW REPLICA STATUS\G"
+
+{{- end }}
+{{- if not (eq .Values.auth.existingSecret "") }}
+Using existing secret: {{ .Values.auth.existingSecret }}
+{{- else }}
+Secret created: {{ include "mysql.secretName" . }}
+Get root password:
+  kubectl get secret {{ include "mysql.secretName" . }} -o jsonpath="{.data.MYSQL_ROOT_PASSWORD}" | base64 -d
+{{- end }}
+
+Connect from inside the cluster:
+  mysql -h {{ include "mysql.fullname" . }} -P {{ .Values.service.port }} -u root -p"$MYSQL_ROOT_PASSWORD"

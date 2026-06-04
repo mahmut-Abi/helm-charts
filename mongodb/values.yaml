@@ -1,0 +1,126 @@
+# Number of MongoDB instances used when cluster.enabled is false.
+replicaCount: 1
+
+image:
+  # Official MongoDB 8.0 image.
+  repository: mongo
+  tag: "8.0"
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+auth:
+  # Change these values before using the chart in production.
+  # rootUser must be set when auth is enabled. Common: admin.
+  rootUser: admin
+  # rootPassword: ""  -- must be set explicitly or use existingSecret
+  rootPassword: ""
+  # Optional database to create on first init.
+  database: ""
+  # Set this to use a pre-created Secret instead of rendering secret.yaml.
+  # The Secret must contain keys MONGO_INITDB_ROOT_USERNAME and
+  # MONGO_INITDB_ROOT_PASSWORD.
+  existingSecret: ""
+
+service:
+  type: ClusterIP
+  port: 27017
+  annotations: {}
+
+headlessService:
+  annotations: {}
+
+cluster:
+  # Enable MongoDB replica set mode. When enabled, all pods join a single
+  # replica set. An odd number of members is recommended for quorum.
+  enabled: false
+  # Number of replica set members. Use 3, 5, or 7.
+  members: 3
+  # Name of the replica set.
+  replicaSetName: rs0
+  # Optional job settings for the post-install hook that runs rs.initiate().
+  initJob:
+    enabled: true
+    backoffLimit: 20
+    activeDeadlineSeconds: 600
+    annotations: {}
+    podAnnotations: {}
+    podLabels: {}
+
+persistence:
+  enabled: true
+  size: 8Gi
+  storageClass: ""
+  accessModes:
+    - ReadWriteOnce
+  annotations: {}
+
+volumePermissions:
+  enabled: true
+  image:
+    repository: mongo
+    tag: "8.0"
+    pullPolicy: IfNotPresent
+  securityContext:
+    runAsUser: 0
+    runAsGroup: 0
+    runAsNonRoot: false
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
+      add:
+        - CHOWN
+        - FOWNER
+    seccompProfile:
+      type: RuntimeDefault
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+readinessProbe:
+  enabled: true
+  initialDelaySeconds: 10
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 6
+
+livenessProbe:
+  enabled: true
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 6
+
+podAnnotations: {}
+podLabels: {}
+
+podSecurityContext:
+  fsGroup: 999
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  runAsNonRoot: true
+  runAsUser: 999
+  runAsGroup: 999
+  seccompProfile:
+    type: RuntimeDefault
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+updateStrategy:
+  type: RollingUpdate
+
+terminationGracePeriodSeconds: 30

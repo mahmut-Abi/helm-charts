@@ -1,0 +1,42 @@
+Apache Kafka has been installed in KRaft mode (no ZooKeeper required).
+
+Release name:
+  {{ .Release.Name }}
+
+Client service (internal):
+  {{ include "kafka.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.service.externalPort }}
+
+Headless service:
+  {{ include "kafka.headlessServiceName" . }}.{{ .Release.Namespace }}.svc.cluster.local
+
+Broker endpoints:
+  {{- $fullname := include "kafka.fullname" . }}
+  {{- $headless := include "kafka.headlessServiceName" . }}
+  {{- $ns := .Release.Namespace }}
+  {{- range $i := until (int .Values.replicas) }}
+  {{ printf "%s-%d.%s.%s.svc.cluster.local:%d" $fullname $i $headless $ns (int $.Values.service.externalPort) }}
+  {{- end }}
+
+Bootstrap server (connect to any broker):
+  {{ include "kafka.headlessServiceName" . }}.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.service.externalPort }}
+
+{{- if .Values.auth.enabled }}
+
+SASL/PLAIN authentication is enabled.
+Credentials are stored in this Secret:
+  {{ include "kafka.secretName" . }}
+
+To retrieve the inter-broker user:
+  kubectl get secret {{ include "kafka.secretName" . }} -o jsonpath='{.data.KAFKA_INTER_BROKER_USER}' | base64 -d
+{{- end }}
+
+To test from a temporary pod:
+  kubectl run {{ include "kafka.fullname" . }}-client --rm -it --restart='Never' \
+    --image={{ .Values.image.repository }}:{{ .Values.image.tag }} -- \
+    /opt/kafka/bin/kafka-topics.sh --bootstrap-server {{ include "kafka.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.service.externalPort }} --list
+
+To create a topic:
+  kubectl run {{ include "kafka.fullname" . }}-client --rm -it --restart='Never' \
+    --image={{ .Values.image.repository }}:{{ .Values.image.tag }} -- \
+    /opt/kafka/bin/kafka-topics.sh --bootstrap-server {{ include "kafka.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.service.externalPort }} \
+    --create --topic my-topic --partitions 3 --replication-factor {{ min (int .Values.replicas) 3 }}

@@ -1,0 +1,190 @@
+# Number of ClickHouse replicas used when cluster.enabled is false.
+replicaCount: 1
+
+image:
+  # Official ClickHouse server image.
+  repository: clickhouse/clickhouse-server
+  tag: "25.3.6"
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+nameOverride: ""
+fullnameOverride: ""
+
+auth:
+  # Values used to populate the generated Secret.
+  user: default
+  # password: ""  -- must be set explicitly or use existingSecret
+  password: clickhouse
+  database: default
+  # Set this to use a pre-created Secret instead of rendering secret.yaml.
+  # The Secret must contain keys matching secretKeys below.
+  existingSecret: ""
+  secretKeys:
+    user: CLICKHOUSE_USER
+    password: CLICKHOUSE_PASSWORD
+    database: CLICKHOUSE_DB
+
+service:
+  # ClusterIP exposes ClickHouse inside the cluster. Use NodePort/LoadBalancer
+  # when external access is needed.
+  type: ClusterIP
+  httpPort: 8123
+  nativePort: 9000
+  # Used by ClickHouse replicas to exchange data parts in cluster mode.
+  interserverHttpPort: 9009
+  annotations: {}
+
+headlessService:
+  annotations: {}
+
+cluster:
+  # Enable ClickHouse cluster configuration. When enabled, the StatefulSet
+  # replica count is calculated as shards * replicasPerShard.
+  enabled: false
+  # Remote server cluster name. Keep this XML-safe: letters, digits, hyphens,
+  # underscores, and do not start with a digit.
+  name: default
+  clusterDomain: cluster.local
+  shards: 1
+  replicasPerShard: 3
+  internalReplication: true
+  defaultReplicaPath: /clickhouse/tables/{shard}/{database}/{table}
+  defaultReplicaName: "{replica}"
+  distributedDdl:
+    path: /clickhouse/task_queue/ddl
+  # Small image used by initContainers to generate per-pod configuration from
+  # the StatefulSet ordinal.
+  configGeneratorImage:
+    repository: busybox
+    tag: "1.36"
+    pullPolicy: IfNotPresent
+
+keeper:
+  # Used when cluster.enabled is true. Keeper is deployed as a separate
+  # StatefulSet; an odd replica count such as 3 or 5 is recommended for quorum.
+  enabled: true
+  replicas: 3
+  image:
+    repository: clickhouse/clickhouse-keeper
+    tag: "25.3.6"
+    pullPolicy: IfNotPresent
+  clientPort: 9181
+  raftPort: 9234
+  operationTimeoutMs: 10000
+  sessionTimeoutMs: 30000
+  storage:
+    logPath: /var/lib/clickhouse-keeper/coordination/log
+    snapshotPath: /var/lib/clickhouse-keeper/coordination/snapshots
+  persistence:
+    enabled: true
+    storageClass: null
+    accessModes:
+      - ReadWriteOnce
+    size: 8Gi
+    annotations: {}
+  podSecurityContext:
+    fsGroup: 101
+    fsGroupChangePolicy: OnRootMismatch
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
+    readOnlyRootFilesystem: true
+    runAsNonRoot: true
+    runAsUser: 101
+    runAsGroup: 101
+    seccompProfile:
+      type: RuntimeDefault
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: 1
+      memory: 1Gi
+
+persistence:
+  enabled: true
+  # Use null to accept the cluster default StorageClass. Set "-" to disable
+  # dynamic provisioning with storageClassName: "".
+  storageClass: null
+  accessModes:
+    - ReadWriteOnce
+  size: 8Gi
+  annotations: {}
+
+volumePermissions:
+  enabled: true
+  securityContext:
+    runAsUser: 0
+    runAsGroup: 0
+    runAsNonRoot: false
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
+      add:
+        - CHOWN
+        - FOWNER
+    seccompProfile:
+      type: RuntimeDefault
+
+resources:
+  requests:
+    cpu: 500m
+    memory: 2Gi
+  limits:
+    cpu: 4
+    memory: 8Gi
+
+podSecurityContext:
+  fsGroup: 101
+  fsGroupChangePolicy: OnRootMismatch
+
+containerSecurityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
+    readOnlyRootFilesystem: true
+    runAsNonRoot: true
+    runAsUser: 101
+    runAsGroup: 101
+    seccompProfile:
+      type: RuntimeDefault
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+podAnnotations: {}
+
+podLabels: {}
+
+terminationGracePeriodSeconds: 120
+
+# Leave empty to use OrderedReady for single-node mode and Parallel for cluster
+# mode. Set explicitly to OrderedReady or Parallel to override.
+podManagementPolicy: ""
+
+# Ingress (standard Kubernetes Ingress) for the HTTP interface.
+ingress:
+  enabled: false
+  className: nginx
+  hostname: ""
+  additionalHostNames: []
+  labels: {}
+  annotations: {}
+  tls: []
+
+# Gateway API (HTTPRoute) for the HTTP interface. Mutually exclusive with ingress.
+gateway:
+  enabled: false
+  gatewayName: ""
+  gatewayNamespace: ""
+  hostname: ""

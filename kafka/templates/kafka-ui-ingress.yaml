@@ -1,0 +1,38 @@
+{{- if and .Values.kafkaUi.enabled .Values.kafkaUi.ingress.enabled }}
+{{- if .Values.kafkaUi.gateway.enabled }}
+{{- fail "kafkaUi.ingress.enabled and kafkaUi.gateway.enabled are mutually exclusive — enable only one" }}
+{{- end }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "kafka.fullname" . }}-ui
+  labels:
+    {{- include "kafka.labels" . | nindent 4 }}
+    app.kubernetes.io/component: ui
+    {{- with .Values.kafkaUi.ingress.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with .Values.kafkaUi.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if .Values.kafkaUi.ingress.className }}
+  ingressClassName: {{ .Values.kafkaUi.ingress.className }}
+  {{- end }}
+  rules:
+    - host: {{ required "kafkaUi.ingress.hostname is required" .Values.kafkaUi.ingress.hostname }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "kafka.fullname" . }}-ui
+                port:
+                  number: {{ .Values.kafkaUi.service.port }}
+  {{- with .Values.kafkaUi.ingress.tls }}
+  tls:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+{{- end }}

@@ -1,0 +1,128 @@
+# Number of OpenSearch nodes when cluster.enabled is false.
+replicaCount: 1
+
+image:
+  # Official OpenSearch image.
+  repository: opensearchproject/opensearch
+  tag: "2.19.0"
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+nameOverride: ""
+fullnameOverride: ""
+
+auth:
+  # Values used to populate the generated Secret.
+  # OpenSearch security plugin is enabled by default. Set adminPassword to
+  # configure the initial admin password. Set existingSecret to use a
+  # pre-created Secret instead of rendering secret.yaml.
+  adminPassword: "admin"
+  # Set this to use a pre-created Secret instead of rendering secret.yaml.
+  # The Secret must contain keys matching secretKeys below.
+  existingSecret: ""
+  secretKeys:
+    adminPassword: OPENSEARCH_INITIAL_ADMIN_PASSWORD
+
+service:
+  # ClusterIP exposes OpenSearch inside the cluster. Use NodePort/LoadBalancer
+  # when external access is needed.
+  type: ClusterIP
+  httpPort: 9200
+  transportPort: 9300
+  annotations: {}
+
+headlessService:
+  annotations: {}
+
+cluster:
+  # Enable OpenSearch cluster mode. When enabled, discovery.seed_hosts is
+  # configured automatically using the headless service.
+  enabled: false
+  # Number of nodes in the cluster. An odd number (3, 5, ...) is recommended
+  # for split-brain protection.
+  replicas: 3
+  clusterDomain: cluster.local
+  # Minimum master-eligible nodes for quorum. Defaults to (replicas/2)+1.
+  # Set explicitly to override the auto-calculated value.
+  minimumMasterNodes: null
+
+# OpenSearch security plugin configuration.
+security:
+  # Disable the security plugin entirely. When disabled, TLS and
+  # authentication are turned off. Only use for development.
+  disabled: false
+  # When true, the demo certificates bundled with the OpenSearch image are
+  # used for inter-node TLS. Not suitable for production.
+  useDemoCerts: true
+
+persistence:
+  enabled: true
+  # Use null to accept the cluster default StorageClass. Set "-" to disable
+  # dynamic provisioning with storageClassName: "".
+  storageClass: null
+  accessModes:
+    - ReadWriteOnce
+  size: 30Gi
+  annotations: {}
+
+resources:
+  requests:
+    cpu: 1
+    memory: 2Gi
+  limits:
+    cpu: 4
+    memory: 8Gi
+
+# JVM heap size. Defaults to half of the memory limit. Set explicitly to
+# override, e.g. "-Xms2g -Xmx2g".
+javaOpts: ""
+
+podSecurityContext:
+  fsGroup: 1000
+  fsGroupChangePolicy: OnRootMismatch
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: false
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  seccompProfile:
+    type: RuntimeDefault
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+podAnnotations: {}
+
+podLabels: {}
+
+terminationGracePeriodSeconds: 120
+
+# Leave empty to use OrderedReady for single-node mode and Parallel for
+# cluster mode. Set explicitly to OrderedReady or Parallel to override.
+podManagementPolicy: ""
+
+# Ingress (standard Kubernetes Ingress) for the HTTP REST API.
+ingress:
+  enabled: false
+  className: nginx
+  hostname: ""
+  additionalHostNames: []
+  labels: {}
+  annotations: {}
+  tls: []
+
+# Gateway API (HTTPRoute) for the HTTP REST API. Mutually exclusive with ingress.
+gateway:
+  enabled: false
+  gatewayName: ""
+  gatewayNamespace: ""
+  hostname: ""

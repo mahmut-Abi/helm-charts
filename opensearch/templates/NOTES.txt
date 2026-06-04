@@ -1,0 +1,39 @@
+OpenSearch has been deployed.
+
+HTTP REST API:
+  http{{ if not .Values.security.disabled }}s{{ end }}://{{ include "opensearch.fullname" . }}:{{ .Values.service.httpPort }}
+
+Transport endpoint:
+  {{ include "opensearch.fullname" . }}:{{ .Values.service.transportPort }}
+
+Credentials are stored in Secret:
+  {{ include "opensearch.secretName" . }}
+
+{{- if .Values.cluster.enabled }}
+
+Cluster mode is enabled.
+
+Nodes:
+  {{ .Values.cluster.replicas }}
+
+Minimum master nodes:
+  {{ include "opensearch.minimumMasterNodes" . }}
+
+Discovery hosts:
+{{- range $i, $_ := until (int (include "opensearch.replicaCount" .)) }}
+  {{ include "opensearch.fullname" $ }}-{{ $i }}.{{ include "opensearch.headlessServiceName" $ }}.{{ $.Release.Namespace }}.svc.{{ $.Values.cluster.clusterDomain }}
+{{- end }}
+{{- end }}
+
+{{- if not .Values.security.disabled }}
+
+Security plugin is enabled.
+{{- if .Values.security.useDemoCerts }}
+Using demo TLS certificates. Not suitable for production.
+{{- end }}
+{{- end }}
+
+Verify cluster health:
+
+  curl -k -u admin:{{ .Values.auth.adminPassword }} \
+    https://{{ include "opensearch.fullname" . }}:{{ .Values.service.httpPort }}/_cluster/health?pretty

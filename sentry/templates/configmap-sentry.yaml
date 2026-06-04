@@ -1,0 +1,121 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "sentry.fullname" . }}-sentry
+  labels:
+    {{- include "sentry.labels" . | nindent 4 }}
+data:
+  sentry.conf.py: |
+    import os
+    import os.path
+
+    # Use dummy secrets for non-install commands (key generation, createsuperuser)
+    if any(c in os.environ.get("SENTRY_RUN_EXECUTABLE", "") for c in ("key", "createsuperuser")):
+        SENTRY_OPTIONS = {"system.secret-key": "dummy"}
+    else:
+        SENTRY_OPTIONS = {"system.secret-key": os.environ.get("SENTRY_SECRET_KEY", "")}
+
+    DATABASES = {
+        "default": {
+            "ENGINE": "sentry.db.postgres",
+            "NAME": os.environ["SENTRY_DB_NAME"],
+            "USER": os.environ["SENTRY_DB_USER"],
+            "PASSWORD": os.environ["SENTRY_DB_PASSWORD"],
+            "HOST": os.environ["SENTRY_POSTGRES_HOST"],
+            "PORT": os.environ.get("SENTRY_POSTGRES_PORT", "5432"),
+            "CONN_MAX_AGE": int(os.environ.get("SENTRY_DB_CONN_MAX_AGE", "60")),
+        }
+    }
+
+    # Redis
+    _redis_host = os.environ.get("SENTRY_REDIS_HOST", "redis")
+    _redis_port = int(os.environ.get("SENTRY_REDIS_PORT", "6379"))
+    _redis_pass = os.environ.get("SENTRY_REDIS_PASSWORD", "")
+    _redis_auth = f":{_redis_pass}@" if _redis_pass else ""
+
+    # Celery broker
+    CELERY_ALWAYS_EAGER = False
+    BROKER_URL = f"redis://{_redis_auth}{_redis_host}:{_redis_port}/0"
+
+    # Redis clusters and rate limiter
+    SENTRY_OPTIONS["redis.clusters"] = {
+        "default": {
+            "hosts": {
+                0: {
+                    "host": _redis_host,
+                    "password": _redis_pass if _redis_pass else None,
+                    "port": _redis_port,
+                }
+            }
+        }
+    }
+
+    # Cache backend
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.redis.RedisCache",
+            "LOCATION": f"redis://{_redis_auth}{_redis_host}:{_redis_port}/2",
+        }
+    }
+    SENTRY_CACHE = "sentry.cache.redis.RedisCache"
+    SENTRY_RATELIMITER = "sentry.ratelimits.redis.RedisRateLimiter"
+    SENTRY_RATE_LIMIT_OPTIONS = {
+        "host": _redis_host,
+        "port": _redis_port,
+    }
+    if _redis_pass:
+        SENTRY_RATE_LIMIT_OPTIONS["password"] = _redis_pass
+
+    SENTRY_DIGESTS = "sentry.digests.backends.redis.RedisBackend"
+    SENTRY_DIGESTS_OPTIONS = {"cluster": "default"}
+    SENTRY_TSDB = "sentry.tsdb.redissnuba.RedisSnubaTSDB"
+
+    # Filestore
+    SENTRY_OPTIONS["filestore.backend"] = os.environ.get("SENTRY_FILESTORE", "filesystem")
+    if SENTRY_OPTIONS["filestore.backend"] == "s3":
+        SENTRY_OPTIONS["filestore.options"] = {
+            "access_key": os.environ.get("SENTRY_FILESTORE_S3_ACCESS_KEY", ""),
+            "secret_key": os.environ.get("SENTRY_FILESTORE_S3_SECRET_KEY", ""),
+            "bucket_name": os.environ.get("SENTRY_FILESTORE_S3_BUCKET_NAME", ""),
+            "endpoint_url": os.environ.get("SENTRY_FILESTORE_S3_ENDPOINT_URL", ""),
+            "region_name": os.environ.get("SENTRY_FILESTORE_S3_REGION", "auto"),
+            "signature_version": os.environ.get("SENTRY_FILESTORE_S3_SIGNATURE_VERSION", "s3v4"),
+            "addressing_style": os.environ.get("SENTRY_FILESTORE_S3_ADDRESSING_STYLE", "path"),
+            "default_acl": "private",
+        }
+    else:
+        SENTRY_FILESTORE_DIR = os.environ.get("SENTRY_FILESTORE_DIR", "/var/lib/sentry/files")
+
+    # Kafka
+    KAFKA_CLUSTERS = {
+        "default": {
+            "bootstrap.servers": os.environ.get("KAFKA_BOOTSTRAP_SERVERS", "kafka:9092"),
+        }
+    }
+
+    # Snuba
+    SENTRY_SNUBA = os.environ.get("SNUBA_HOST", "http://snuba:1218")
+
+    # Release registry
+    SENTRY_RELEASE_REGISTRY_BASEURL = os.environ.get("SENTRY_RELEASE_REGISTRY_BASEURL", "https://release-registry.sentry.io")
+
+    # Relay
+    SENTRY_RELAY_HOST = os.environ.get("SENTRY_RELAY_HOST", "relay")
+    SENTRY_RELAY_PORT = int(os.environ.get("SENTRY_RELAY_PORT", "3000"))
+
+    # System
+    SENTRY_SYSTEM_URL = os.environ.get("SENTRY_SYSTEM_URL", "http://localhost:9000")
+    SENTRY_OPTIONS["system.admin-email"] = os.environ.get("SENTRY_ADMIN_EMAIL", "admin@localhost")
+
+    # Web
+    SENTRY_WEB_HOST = "0.0.0.0"
+    SENTRY_WEB_PORT = {{ .Values.web.port }}
+    SENTRY_WEB_OPTIONS = {
+        "http": "{}:{}".format(SENTRY_WEB_HOST, SENTRY_WEB_PORT),
+        "workers": int(os.environ.get("SENTRY_WEB_WORKERS", "3")),
+        "threads": int(os.environ.get("SENTRY_WEB_THREADS", "4")),
+    }
+
+    SENTRY_FEATURES = {
+        "organizations:session-replay": True,
+    }

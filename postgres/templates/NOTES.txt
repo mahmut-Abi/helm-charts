@@ -1,0 +1,39 @@
+PostgreSQL has been installed.
+
+Release name:
+  {{ .Release.Name }}
+
+Service endpoint inside the cluster:
+  {{ include "postgres.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.service.port }}
+
+Headless service:
+  {{ include "postgres.headlessServiceName" . }}.{{ .Release.Namespace }}.svc.cluster.local
+
+Credentials are stored in this Secret:
+  {{ include "postgres.secretName" . }}
+
+{{- if .Values.cluster.enabled }}
+
+Cluster mode is enabled.
+
+Primary pod:
+  {{ include "postgres.primaryPodName" . }}
+
+Primary StatefulSet:
+  {{ include "postgres.primaryFullname" . }}
+
+Replica StatefulSet:
+  {{ include "postgres.replicaFullname" . }}
+
+Primary read-write service:
+  {{ include "postgres.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.service.port }}
+
+Replica pods:
+  {{ include "postgres.replicaFullname" . }}-0..{{ include "postgres.replicaFullname" . }}-{{ sub (include "postgres.readReplicaCount" . | int) 1 }}
+
+This chart configures physical streaming replication. It does not perform
+automatic primary failover.
+{{- end }}
+
+To connect from a temporary pod:
+  kubectl run {{ include "postgres.fullname" . }}-client --rm -it --restart='Never' --image={{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }} --env="PGPASSWORD=$(kubectl get secret {{ include "postgres.secretName" . }} -o jsonpath='{.data.POSTGRES_PASSWORD}' | base64 -d)" -- psql -h {{ include "postgres.fullname" . }} -U {{ .Values.auth.postgresUser }} -d {{ .Values.auth.postgresDatabase }}

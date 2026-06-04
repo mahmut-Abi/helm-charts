@@ -1,0 +1,110 @@
+{{- if and .Values.cluster.enabled .Values.cluster.initJob.enabled }}
+{{- include "mongodb.validateValues" . }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "mongodb.fullname" . }}-replica-init
+  labels:
+    {{- include "mongodb.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "5"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+    {{- with .Values.cluster.initJob.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  backoffLimit: {{ .Values.cluster.initJob.backoffLimit }}
+  activeDeadlineSeconds: {{ .Values.cluster.initJob.activeDeadlineSeconds }}
+  template:
+    metadata:
+      labels:
+        helm.sh/chart: {{ include "mongodb.chart" . }}
+        app.kubernetes.io/managed-by: {{ .Release.Service }}
+        app.kubernetes.io/component: replica-init
+        {{- with .Values.cluster.initJob.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.cluster.initJob.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      restartPolicy: OnFailure
+      automountServiceAccountToken: false
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: mongodb-replica-init
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          env:
+            - name: MONGO_INITDB_ROOT_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "mongodb.secretName" . }}
+                  key: MONGO_INITDB_ROOT_USERNAME
+            - name: MONGO_INITDB_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "mongodb.secretName" . }}
+                  key: MONGO_INITDB_ROOT_PASSWORD
+          command:
+            - /bin/bash
+            - -ec
+          args:
+            - |
+              members={{ int .Values.cluster.members }}
+              replicaset="{{ .Values.cluster.replicaSetName }}"
+              statefulset="{{ include "mongodb.fullname" . }}"
+              headless="{{ include "mongodb.headlessServiceName" . }}"
+              namespace="{{ .Release.Namespace }}"
+              port="{{ .Values.service.port }}"
+
+              mongo_uri() {
+                echo "mongodb://${MONGO_INITDB_ROOT_USERNAME}:${MONGO_INITDB_ROOT_PASSWORD}@${statefulset}-$1.${headless}.${namespace}.svc.cluster.local:${port}/admin"
+              }
+
+              echo "Waiting for pod-0 to be ready."
+              until mongosh --quiet "$(mongo_uri 0)" --eval "db.adminCommand('ping')" 2>/dev/null | grep -q ok; do
+                sleep 2
+              done
+
+              echo "Checking if replica set is already initialized."
+              status="$(mongosh --quiet "$(mongo_uri 0)" --eval "rs.status().ok" 2>/dev/null || true)"
+              if echo "$status" | grep -q '^1$'; then
+                echo "Replica set ${replicaset} is already initialized."
+                exit 0
+              fi
+
+              echo "Initiating replica set ${replicaset} with ${members} members."
+              members_json="["
+              for i in $(seq 0 $((members - 1))); do
+                if [ "$i" -gt 0 ]; then members_json="${members_json},"; fi
+                host="${statefulset}-${i}.${headless}.${namespace}.svc.cluster.local:${port}"
+                members_json="${members_json}{_id:${i},host:\"${host}\"}"
+              done
+              members_json="${members_json}]"
+
+              mongosh --quiet "$(mongo_uri 0)" <<EOF
+              rs.initiate({
+                _id: "${replicaset}",
+                members: ${members_json}
+              });
+              EOF
+
+              echo "Replica set initiated. Waiting for PRIMARY election."
+              for i in $(seq 1 30); do
+                if mongosh --quiet "$(mongo_uri 0)" --eval "rs.status().members.find(m => m.stateStr === 'PRIMARY')" 2>/dev/null | grep -q PRIMARY; then
+                  echo "PRIMARY elected."
+                  exit 0
+                fi
+                sleep 2
+              done
+              echo "Timeout waiting for PRIMARY election." >&2
+              exit 1
+{{- end }}

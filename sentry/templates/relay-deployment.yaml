@@ -1,0 +1,99 @@
+{{- if .Values.relay.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "sentry.fullname" . }}-relay
+  labels:
+    {{- include "sentry.relaySelectorLabels" . | nindent 4 }}
+    {{- include "sentry.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.relay.replicas }}
+  selector:
+    matchLabels:
+      {{- include "sentry.relaySelectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "sentry.relaySelectorLabels" . | nindent 8 }}
+        {{- with .Values.relay.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.relay.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: false
+        runAsUser: 0
+        runAsGroup: 0
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      initContainers:
+        - name: copy-config
+          image: "{{ .Values.image.busybox.repository }}:{{ .Values.image.busybox.tag }}"
+          imagePullPolicy: {{ .Values.image.busybox.pullPolicy }}
+          command: ["cp", "/relay-config/config.yml", "/etc/relay/config.yml"]
+          volumeMounts:
+            - name: relay-config-source
+              mountPath: /relay-config
+              readOnly: true
+            - name: relay-conf
+              mountPath: /etc/relay
+        - name: generate-creds
+          image: {{ include "sentry.relayImage" . }}
+          imagePullPolicy: {{ .Values.image.relay.pullPolicy }}
+          command: ["relay", "credentials", "generate"]
+          workingDir: /etc/relay
+          volumeMounts:
+            - name: relay-conf
+              mountPath: /etc/relay
+      containers:
+        - name: relay
+          image: {{ include "sentry.relayImage" . }}
+          imagePullPolicy: {{ .Values.image.relay.pullPolicy }}
+          command: ["relay", "run", "--config", "/etc/relay"]
+          ports:
+            - name: relay
+              containerPort: {{ .Values.relay.port }}
+              protocol: TCP
+          env:
+            {{- with .Values.relay.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          volumeMounts:
+            - name: relay-conf
+              mountPath: /etc/relay
+          {{- with .Values.relay.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
+      volumes:
+        - name: relay-config-source
+          configMap:
+            name: {{ include "sentry.fullname" . }}-relay
+        - name: relay-conf
+          emptyDir: {}
+      {{- with .Values.relay.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.relay.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.relay.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

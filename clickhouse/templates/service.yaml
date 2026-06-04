@@ -1,0 +1,78 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "clickhouse.fullname" . }}
+  labels:
+    {{- include "clickhouse.labels" . | nindent 4 }}
+  {{- with .Values.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - name: http
+      port: {{ .Values.service.httpPort }}
+      targetPort: http
+      protocol: TCP
+    - name: native
+      port: {{ .Values.service.nativePort }}
+      targetPort: native
+      protocol: TCP
+  selector:
+    {{- include "clickhouse.selectorLabels" . | nindent 4 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "clickhouse.headlessServiceName" . }}
+  labels:
+    {{- include "clickhouse.labels" . | nindent 4 }}
+  {{- with .Values.headlessService.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  ports:
+    - name: http
+      port: {{ .Values.service.httpPort }}
+      targetPort: http
+      protocol: TCP
+    - name: native
+      port: {{ .Values.service.nativePort }}
+      targetPort: native
+      protocol: TCP
+    {{- if .Values.cluster.enabled }}
+    - name: interserver
+      port: {{ .Values.service.interserverHttpPort }}
+      targetPort: interserver
+      protocol: TCP
+    {{- end }}
+  selector:
+    {{- include "clickhouse.selectorLabels" . | nindent 4 }}
+{{- if and .Values.cluster.enabled .Values.keeper.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "clickhouse.keeperHeadlessServiceName" . }}
+  labels:
+    {{- include "clickhouse.keeperLabels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  clusterIP: None
+  publishNotReadyAddresses: true
+  ports:
+    - name: keeper
+      port: {{ .Values.keeper.clientPort }}
+      targetPort: keeper
+      protocol: TCP
+    - name: keeper-raft
+      port: {{ .Values.keeper.raftPort }}
+      targetPort: keeper-raft
+      protocol: TCP
+  selector:
+    {{- include "clickhouse.keeperSelectorLabels" . | nindent 4 }}
+{{- end }}

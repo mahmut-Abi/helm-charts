@@ -1,0 +1,45 @@
+{{- if eq .Values.storage.backend "local" }}
+{{- if and .Values.storage.local.data.persistence.enabled (not .Values.storage.local.data.persistence.existingClaim) }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "tempo.fullname" . }}-data
+  labels:
+    {{- include "tempo.labels" . | nindent 4 }}
+  {{- with .Values.storage.local.data.persistence.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  accessModes:
+    - {{ .Values.storage.local.data.persistence.accessMode }}
+  resources:
+    requests:
+      storage: {{ .Values.storage.local.data.persistence.size }}
+  {{- with .Values.storage.local.data.persistence.storageClass }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+{{- end }}
+---
+{{- if and .Values.storage.local.wal.persistence.enabled (not .Values.storage.local.wal.persistence.existingClaim) }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "tempo.fullname" . }}-wal
+  labels:
+    {{- include "tempo.labels" . | nindent 4 }}
+  {{- with .Values.storage.local.wal.persistence.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  accessModes:
+    - {{ .Values.storage.local.wal.persistence.accessMode }}
+  resources:
+    requests:
+      storage: {{ .Values.storage.local.wal.persistence.size }}
+  {{- with .Values.storage.local.wal.persistence.storageClass }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+{{- end }}
+{{- end }}

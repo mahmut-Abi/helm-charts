@@ -1,0 +1,53 @@
+Sentry has been deployed.
+
+Release name:
+  {{ .Release.Name }}
+
+{{- if .Values.web.enabled }}
+Web endpoint:
+  http://{{ include "sentry.fullname" . }}:{{ .Values.service.port }}
+  Web replicas: {{ .Values.web.replicas }}
+{{- end }}
+{{- if .Values.worker.enabled }}
+Worker replicas: {{ .Values.worker.replicas }} (concurrency: {{ .Values.worker.concurrency }})
+{{- end }}
+{{- if .Values.cron.enabled }}
+Cron: enabled
+{{- end }}
+{{- if .Values.relay.enabled }}
+Relay:
+  http://{{ include "sentry.fullname" . }}-relay:{{ .Values.relay.port }}
+  Relay replicas: {{ .Values.relay.replicas }}
+{{- end }}
+{{- if .Values.snuba.api.enabled }}
+Snuba API replicas: {{ .Values.snuba.api.replicas }}
+{{- end }}
+{{- if .Values.snuba.consumer.enabled }}
+Snuba consumer replicas: {{ .Values.snuba.consumer.replicas }}
+{{- end }}
+
+{{- if not (eq .Values.auth.existingSecret "") }}
+Using existing secret: {{ .Values.auth.existingSecret }}
+{{- else }}
+Secret created: {{ include "sentry.secretName" . }}
+{{- end }}
+
+PostgreSQL: {{ include "sentry.databaseUrl" . }}
+Redis: {{ .Values.redis.host }}:{{ .Values.redis.port }}
+Kafka: {{ .Values.kafka.bootstrapServers }}
+ClickHouse: {{ .Values.clickhouse.host }}:{{ .Values.clickhouse.httpPort }}
+
+{{- if .Values.user.password }}
+To create an admin user, exec into the web pod:
+
+  kubectl exec -n {{ .Release.Namespace }} deploy/{{ include "sentry.fullname" . }}-web -- \
+    sentry createuser --email {{ .Values.user.email }} --password {{ .Values.user.password }} --superuser --no-input
+{{- else }}
+No admin password set. To create an admin user after deployment:
+
+  kubectl exec -n {{ .Release.Namespace }} deploy/{{ include "sentry.fullname" . }}-web -- \
+    sentry createuser --email YOUR_EMAIL --password YOUR_PASSWORD --superuser --no-input
+{{- end }}
+
+Health check:
+  curl http://{{ include "sentry.fullname" . }}:{{ .Values.service.port }}/_health/

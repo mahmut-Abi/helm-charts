@@ -1,0 +1,23 @@
+{{- if and .Values.kafkaUi.enabled .Values.kafkaUi.gateway.enabled }}
+{{- if .Values.kafkaUi.ingress.enabled }}
+{{- fail "kafkaUi.ingress.enabled and kafkaUi.gateway.enabled are mutually exclusive — enable only one" }}
+{{- end }}
+{{- $gwNamespace := .Values.kafkaUi.gateway.gatewayNamespace | default .Release.Namespace }}
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ include "kafka.fullname" . }}-ui
+  labels:
+    {{- include "kafka.labels" . | nindent 4 }}
+    app.kubernetes.io/component: ui
+spec:
+  parentRefs:
+    - name: {{ required "kafkaUi.gateway.gatewayName is required" .Values.kafkaUi.gateway.gatewayName }}
+      namespace: {{ $gwNamespace }}
+  hostnames:
+    - {{ required "kafkaUi.gateway.hostname is required" .Values.kafkaUi.gateway.hostname }}
+  rules:
+    - backendRefs:
+        - name: {{ include "kafka.fullname" . }}-ui
+          port: {{ .Values.kafkaUi.service.port }}
+{{- end }}

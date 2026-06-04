@@ -1,0 +1,149 @@
+image:
+  repository: ghcr.io/langfuse/langfuse
+  tag: "3.177.1"
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+# Langfuse requires several secrets for encryption and authentication.
+# Generate strong random values for production. Required.
+auth:
+  # SALT: Random string for password hashing. Auto-generated if not set.
+  # salt: ""
+  salt: ""
+  # ENCRYPTION_KEY: 256-bit key for encrypting sensitive data. Auto-generated if not set.
+  # encryptionKey: ""
+  encryptionKey: ""
+  # NEXTAUTH_SECRET: Random string for NextAuth.js. Auto-generated if not set.
+  # nextauthSecret: ""
+  nextauthSecret: ""
+  # NEXTAUTH_URL: Public URL of the Langfuse instance.
+  nextauthUrl: "http://localhost:3000"
+  # Set this to use a pre-created Secret instead of rendering secret.yaml.
+  # The Secret must contain keys: SALT, ENCRYPTION_KEY, NEXTAUTH_SECRET.
+  existingSecret: ""
+
+# PostgreSQL connection. Point to an existing PostgreSQL instance.
+postgres:
+  host: ""
+  port: 5432
+  database: postgres
+  user: postgres
+  # password: ""  -- must be set or use postgres.existingSecret
+  password: ""
+  schema: public
+  existingSecret: ""
+  existingSecretKey: ""
+  # Direct DATABASE_URL override. When set, individual host/port/db/user fields are ignored.
+  directUrl: ""
+
+# ClickHouse connection. Point to an existing ClickHouse instance.
+clickhouse:
+  url: ""
+  migrationUrl: ""
+  database: default
+  user: default
+  # password: ""  -- must be set or use clickhouse.existingSecret
+  password: ""
+  clusterEnabled: false
+  tlsEnabled: false
+  existingSecret: ""
+  existingSecretKey: ""
+  # Disable automatic ClickHouse migrations (only one instance should run them).
+  autoMigrationDisabled: false
+
+# Redis connection. Point to an existing Redis instance.
+redis:
+  connectionString: ""
+  host: ""
+  port: 6379
+  tlsEnabled: false
+  existingSecret: ""
+
+# S3-compatible storage for events and media.
+s3:
+  enabled: false
+  endpoint: ""
+  region: "auto"
+  bucket: "langfuse"
+  accessKeyId: ""
+  secretAccessKey: ""
+  forcePathStyle: false
+  existingSecret: ""
+
+# Web server (Next.js frontend + API).
+web:
+  enabled: true
+  replicas: 1
+  port: 3000
+  # Image for the web container. Falls back to global image if not set.
+  image:
+    repository: ""
+    tag: ""
+  # Node.js --max-old-space-size. Defaults to empty (Node.js auto-detects).
+  nodeOptions: ""
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: 2
+      memory: 2Gi
+  podAnnotations: {}
+  podLabels: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  # Extra environment variables passed to the web container.
+  extraEnv: []
+
+# Background worker for async processing.
+worker:
+  enabled: true
+  replicas: 1
+  image:
+    repository: ""
+    tag: ""
+  # Node.js --max-old-space-size. Defaults to empty (Node.js auto-detects).
+  nodeOptions: ""
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: 1
+      memory: 1Gi
+  podAnnotations: {}
+  podLabels: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  extraEnv: []
+
+service:
+  type: ClusterIP
+  port: 3000
+  annotations: {}
+
+serviceAccount:
+  create: false
+  name: ""
+
+# Ingress (standard Kubernetes Ingress) for the web UI.
+ingress:
+  enabled: false
+  className: nginx
+  hostname: ""
+  additionalHostNames: []
+  labels: {}
+  annotations: {}
+  tls: []
+
+# Gateway API (HTTPRoute) for the web UI. Mutually exclusive with ingress.
+gateway:
+  enabled: false
+  gatewayName: ""
+  gatewayNamespace: ""
+  hostname: ""

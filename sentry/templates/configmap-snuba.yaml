@@ -1,0 +1,62 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "sentry.fullname" . }}-snuba
+  labels:
+    {{- include "sentry.labels" . | nindent 4 }}
+data:
+  settings.py: |
+    import os
+
+    from snuba.settings import *  # noqa: F401, F403 - import and override all defaults
+
+    env = os.environ.get
+
+    # ClickHouse cluster — explicitly configured so all storages share the
+    # same CLICKHOUSE_DATABASE (defaults to "default"). When deployed against
+    # a cluster with multiple ClickHouse nodes, set CLICKHOUSE_SECURE and
+    # CLICKHOUSE_VERIFY as needed.
+    CLUSTERS = [
+        {
+            "host": env("CLICKHOUSE_HOST", "localhost"),
+            "port": int(env("CLICKHOUSE_PORT", "9000")),
+            "http_port": int(env("CLICKHOUSE_HTTP_PORT", "8123")),
+            "secure": env("CLICKHOUSE_SECURE", "False").lower() in ("1", "true"),
+            "ca_certs": env("CLICKHOUSE_CA_CERTS", None),
+            "verify": env("CLICKHOUSE_VERIFY", "False").lower() in ("1", "true"),
+            "user": env("CLICKHOUSE_USER", "default"),
+            "password": env("CLICKHOUSE_PASSWORD", ""),
+            "max_connections": int(env("CLICKHOUSE_MAX_CONNECTIONS", "100")),
+            "database": env("CLICKHOUSE_DATABASE", "default"),
+            "storage_sets": {
+                "cdc",
+                "discover",
+                "eap_items",
+                "events",
+                "events_analytics_platform",
+                "events_ro",
+                "functions",
+                "generic_metrics_counters",
+                "generic_metrics_distributions",
+                "generic_metrics_gauges",
+                "generic_metrics_sets",
+                "group_attributes",
+                "metrics",
+                "metrics_summaries",
+                "migrations",
+                "outcomes",
+                "profile_chunks",
+                "profiles",
+                "querylog",
+                "replays",
+                "search_issues",
+                "sessions",
+                "spans",
+                "transactions",
+                "transactions_ro",
+            },
+            "single_node": {{ .Values.clickhouse.singleNode | default false | ternary "True" "False" }},
+            "cluster_name": env("CLICKHOUSE_CLUSTER_NAME", "default"),
+            "distributed_cluster_name": env("CLICKHOUSE_DISTRIBUTED_CLUSTER_NAME", "default"),
+        }
+    ]

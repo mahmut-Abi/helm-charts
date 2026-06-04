@@ -1,0 +1,23 @@
+{{- if .Values.gateway.enabled }}
+{{- if .Values.ingress.enabled }}
+{{- fail "ingress.enabled and gateway.enabled are mutually exclusive — enable only one" }}
+{{- end }}
+{{- $gatewayNamespace := .Values.gateway.gatewayNamespace | default .Release.Namespace }}
+{{- $hostname := required "gateway.hostname is required when gateway.enabled is true" .Values.gateway.hostname }}
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ include "rabbitmq.fullname" . }}
+  labels:
+    {{- include "rabbitmq.labels" . | nindent 4 }}
+spec:
+  parentRefs:
+    - name: {{ .Values.gateway.gatewayName }}
+      namespace: {{ $gatewayNamespace }}
+  hostnames:
+    - {{ $hostname }}
+  rules:
+    - backendRefs:
+        - name: {{ include "rabbitmq.fullname" . }}
+          port: {{ .Values.service.managementPort }}
+{{- end }}

@@ -1,0 +1,144 @@
+{{- if .Values.worker.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "langfuse.fullname" . }}-worker
+  labels:
+    {{- include "langfuse.workerSelectorLabels" . | nindent 4 }}
+    {{- include "langfuse.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.worker.replicas }}
+  selector:
+    matchLabels:
+      {{- include "langfuse.workerSelectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "langfuse.workerSelectorLabels" . | nindent 8 }}
+        {{- with .Values.worker.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.worker.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      automountServiceAccountToken: false
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: langfuse-worker
+          image: {{ include "langfuse.workerImage" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: SALT
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "langfuse.secretName" . }}
+                  key: SALT
+            - name: ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "langfuse.secretName" . }}
+                  key: ENCRYPTION_KEY
+            - name: NEXTAUTH_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "langfuse.secretName" . }}
+                  key: NEXTAUTH_SECRET
+            - name: NEXTAUTH_URL
+              value: {{ .Values.auth.nextauthUrl | quote }}
+            - name: DATABASE_URL
+              value: {{ include "langfuse.databaseUrl" . | quote }}
+            {{- if .Values.worker.nodeOptions }}
+            - name: NODE_OPTIONS
+              value: {{ .Values.worker.nodeOptions | quote }}
+            {{- end }}
+            {{- if .Values.clickhouse.url }}
+            - name: CLICKHOUSE_URL
+              value: {{ .Values.clickhouse.url | quote }}
+            {{- end }}
+            {{- if or .Values.clickhouse.migrationUrl .Values.clickhouse.url }}
+            - name: CLICKHOUSE_MIGRATION_URL
+              value: {{ include "langfuse.clickhouseMigrationUrl" . | quote }}
+            {{- end }}
+            - name: CLICKHOUSE_USER
+              value: {{ .Values.clickhouse.user | quote }}
+            {{- if .Values.clickhouse.password }}
+            - name: CLICKHOUSE_PASSWORD
+              value: {{ .Values.clickhouse.password | quote }}
+            {{- else if .Values.clickhouse.existingSecret }}
+            - name: CLICKHOUSE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.clickhouse.existingSecret }}
+                  key: {{ default "CLICKHOUSE_PASSWORD" .Values.clickhouse.existingSecretKey }}
+            {{- end }}
+            - name: CLICKHOUSE_DB
+              value: {{ .Values.clickhouse.database | quote }}
+            - name: CLICKHOUSE_CLUSTER_ENABLED
+              value: {{ .Values.clickhouse.clusterEnabled | quote }}
+            - name: CLICKHOUSE_MIGRATION_SSL
+              value: {{ .Values.clickhouse.tlsEnabled | quote }}
+            - name: LANGFUSE_AUTO_CLICKHOUSE_MIGRATION_DISABLED
+              value: {{ .Values.clickhouse.autoMigrationDisabled | quote }}
+            {{- if .Values.redis.connectionString }}
+            - name: REDIS_CONNECTION_STRING
+              value: {{ .Values.redis.connectionString | quote }}
+            {{- end }}
+            {{- if .Values.redis.host }}
+            - name: REDIS_HOST
+              value: {{ .Values.redis.host | quote }}
+            {{- end }}
+            {{- if .Values.redis.port }}
+            - name: REDIS_PORT
+              value: {{ .Values.redis.port | quote }}
+            {{- end }}
+            {{- if .Values.redis.tlsEnabled }}
+            - name: REDIS_TLS_ENABLED
+              value: "true"
+            {{- end }}
+            {{- if .Values.s3.enabled }}
+            - name: LANGFUSE_S3_EVENT_UPLOAD_BUCKET
+              value: {{ .Values.s3.bucket | quote }}
+            - name: LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT
+              value: {{ .Values.s3.endpoint | quote }}
+            - name: LANGFUSE_S3_EVENT_UPLOAD_REGION
+              value: {{ .Values.s3.region | quote }}
+            - name: LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID
+              value: {{ .Values.s3.accessKeyId | quote }}
+            - name: LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY
+              value: {{ .Values.s3.secretAccessKey | quote }}
+            - name: LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE
+              value: {{ .Values.s3.forcePathStyle | quote }}
+            {{- end }}
+            {{- range .Values.worker.extraEnv }}
+            - name: {{ .name }}
+              value: {{ .value | quote }}
+            {{- end }}
+          resources:
+            {{- toYaml .Values.worker.resources | nindent 12 }}
+          ports:
+            - containerPort: 3030
+              name: http
+              protocol: TCP
+          livenessProbe:
+            tcpSocket:
+              port: 3030
+            initialDelaySeconds: 30
+            periodSeconds: 30
+      {{- with .Values.worker.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.worker.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.worker.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

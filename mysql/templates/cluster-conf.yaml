@@ -1,0 +1,82 @@
+{{- if .Values.cluster.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "mysql.fullname" . }}-primary-conf
+  labels:
+    {{- include "mysql.labels" . | nindent 4 }}
+    app.kubernetes.io/component: primary
+data:
+  primary.cnf: |
+    [mysqld]
+    server-id = 1
+    log-bin = mysql-bin
+    gtid_mode = ON
+    enforce-gtid-consistency = ON
+    binlog_format = ROW
+    sync_binlog = 1
+    relay-log = relay-bin
+    skip-replica-start = 0
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "mysql.fullname" . }}-replica-conf
+  labels:
+    {{- include "mysql.labels" . | nindent 4 }}
+    app.kubernetes.io/component: replica
+data:
+  replica.cnf: |
+    [mysqld]
+    server-id = 100
+    gtid_mode = ON
+    enforce-gtid-consistency = ON
+    relay-log = relay-bin
+    skip-replica-start = 1
+    read_only = ON
+  configure-replica-entrypoint.sh: |
+    #!/bin/bash
+    set -e
+
+    PRIMARY="{{ include "mysql.primaryFullname" . }}-0.{{ include "mysql.headlessServiceName" . }}.{{ .Release.Namespace }}.svc.cluster.local"
+
+    # If MySQL was already initialized, just start normally.
+    if [ -f /var/lib/mysql/initialized ]; then
+      exec /docker-entrypoint.sh mysqld --skip-replica-start=0
+    fi
+
+    echo "Waiting for primary ${PRIMARY} to be ready."
+    until mysqladmin ping -h "${PRIMARY}" -u root -p"${MYSQL_ROOT_PASSWORD}" --silent 2>/dev/null; do
+      sleep 2
+    done
+
+    echo "Starting MySQL in background for replication setup."
+    /docker-entrypoint.sh mysqld --skip-replica-start &
+    MYSQL_PID=$!
+
+    until mysqladmin ping -h localhost -u root -p"${MYSQL_ROOT_PASSWORD}" --silent 2>/dev/null; do
+      sleep 1
+    done
+
+    echo "Configuring GTID-based replication from ${PRIMARY}."
+    mysql -u root -p"${MYSQL_ROOT_PASSWORD}" <<EOSQL
+    CHANGE REPLICATION SOURCE TO
+      SOURCE_HOST='${PRIMARY}',
+      SOURCE_PORT={{ .Values.service.port }},
+      SOURCE_USER='${MYSQL_REPLICATION_USER}',
+      SOURCE_PASSWORD='${MYSQL_REPLICATION_PASSWORD}',
+      SOURCE_AUTO_POSITION=1,
+      GET_SOURCE_PUBLIC_KEY=1;
+    START REPLICA;
+    EOSQL
+
+    echo "Replication configured. Marking as initialized."
+    touch /var/lib/mysql/initialized
+
+    echo "Shutting down bootstrap instance."
+    mysqladmin -u root -p"${MYSQL_ROOT_PASSWORD}" shutdown
+    wait ${MYSQL_PID}
+
+    echo "Starting MySQL with replication."
+    exec /docker-entrypoint.sh mysqld --skip-replica-start=0
+{{- end }}

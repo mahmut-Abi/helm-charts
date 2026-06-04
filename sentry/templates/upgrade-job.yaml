@@ -1,0 +1,155 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "sentry.fullname" . }}-upgrade
+  labels:
+    {{- include "sentry.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 60
+  template:
+    spec:
+      automountServiceAccountToken: false
+      restartPolicy: Never
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      initContainers:
+        - name: create-db
+          image: "{{ .Values.image.postgres.repository }}:{{ .Values.image.postgres.tag }}"
+          imagePullPolicy: {{ .Values.image.postgres.pullPolicy }}
+          env:
+            - name: PGHOST
+              value: {{ .Values.postgres.host | quote }}
+            - name: PGPORT
+              value: {{ .Values.postgres.port | quote }}
+            - name: PGUSER
+              value: {{ .Values.postgres.user | quote }}
+            - name: PGPASSWORD
+            {{- if .Values.postgres.password }}
+              value: {{ .Values.postgres.password | quote }}
+            {{- else if .Values.postgres.existingSecret }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.postgres.existingSecret }}
+                  key: {{ .Values.postgres.existingSecretKey | default "password" }}
+            {{- else }}
+              value: ""
+            {{- end }}
+          command:
+            - /bin/bash
+            - -c
+            - |
+              echo "SELECT 'CREATE DATABASE {{ .Values.postgres.database }}' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = '{{ .Values.postgres.database }}')\gexec" | psql
+        - name: create-clickhouse-db
+          image: {{ include "sentry.snubaImage" . }}
+          imagePullPolicy: {{ .Values.image.snuba.pullPolicy }}
+          command:
+            - python
+            - -c
+            - |
+              from clickhouse_driver import Client
+              from clickhouse_driver.errors import ServerException
+              import sys
+
+              c = Client(
+                  host="{{ .Values.clickhouse.host }}",
+                  port={{ .Values.clickhouse.tcpPort }},
+                  user="{{ .Values.clickhouse.user }}",
+                  password="{{ .Values.clickhouse.password }}",
+              )
+              db = "{{ .Values.clickhouse.database }}"
+
+              try:
+                  c.execute(f"CREATE DATABASE IF NOT EXISTS {db} ON CLUSTER 'default'")
+                  print(f"Database '{db}' created on cluster 'default'")
+              except ServerException:
+                  c.execute(f"CREATE DATABASE IF NOT EXISTS {db}")
+                  print(f"Database '{db}' created (standalone)")
+
+              result = c.execute(f"SELECT 1 FROM system.databases WHERE name = '{db}'")
+              if not result:
+                  print(f"ERROR: Failed to create database '{db}'. Check that ClickHouse user '{{ .Values.clickhouse.user }}' has CREATE DATABASE permission.", file=sys.stderr)
+                  sys.exit(1)
+              print(f"Database '{db}' ready")
+      containers:
+        - name: upgrade
+          image: {{ include "sentry.webImage" . }}
+          imagePullPolicy: {{ .Values.image.sentry.pullPolicy }}
+          command: ["sentry", "upgrade", "--noinput"]
+          env:
+            - name: SENTRY_WEB_HOST
+              value: "0.0.0.0"
+            - name: SENTRY_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "sentry.secretName" . }}
+                  key: SENTRY_SECRET_KEY
+            - name: SENTRY_DB_NAME
+              value: {{ .Values.postgres.database | quote }}
+            - name: SENTRY_DB_USER
+              value: {{ .Values.postgres.user | quote }}
+            - name: SENTRY_DB_PASSWORD
+            {{- if .Values.postgres.password }}
+              value: {{ .Values.postgres.password | quote }}
+            {{- else if .Values.postgres.existingSecret }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.postgres.existingSecret }}
+                  key: {{ .Values.postgres.existingSecretKey | default "password" }}
+            {{- else }}
+              value: ""
+            {{- end }}
+            - name: SENTRY_POSTGRES_HOST
+              value: {{ .Values.postgres.host | quote }}
+            - name: SENTRY_POSTGRES_PORT
+              value: {{ .Values.postgres.port | quote }}
+            - name: SENTRY_REDIS_HOST
+              value: {{ .Values.redis.host | quote }}
+            - name: SENTRY_REDIS_PORT
+              value: {{ .Values.redis.port | quote }}
+            - name: SENTRY_REDIS_PASSWORD
+            {{- if .Values.redis.password }}
+              value: {{ .Values.redis.password | quote }}
+            {{- else if .Values.redis.existingSecret }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.redis.existingSecret }}
+                  key: {{ .Values.redis.existingSecretKey | default "password" }}
+            {{- else }}
+              value: ""
+            {{- end }}
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              value: {{ .Values.kafka.bootstrapServers | quote }}
+            {{- if .Values.snuba.api.enabled }}
+            - name: SNUBA_HOST
+              value: "http://{{ include "sentry.fullname" . }}-snuba-api.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.snuba.api.port }}"
+            {{- end }}
+            - name: SENTRY_SYSTEM_URL
+              value: {{ .Values.system.url | quote }}
+            - name: SENTRY_ADMIN_EMAIL
+              value: {{ .Values.user.email | quote }}
+            - name: SENTRY_ADMIN_PASSWORD
+              {{- if .Values.user.password }}
+              value: {{ .Values.user.password | quote }}
+            {{- else }}
+              value: ""
+            {{- end }}
+            {{- if .Values.relay.enabled }}
+            - name: SENTRY_RELAY_HOST
+              value: {{ include "sentry.fullname" . }}-relay.{{ .Release.Namespace }}.svc.cluster.local
+            - name: SENTRY_RELAY_PORT
+              value: {{ .Values.relay.port | quote }}
+            {{- end }}
+          volumeMounts:
+            - name: sentry-conf
+              mountPath: /etc/sentry
+              readOnly: true
+      volumes:
+        - name: sentry-conf
+          configMap:
+            name: {{ include "sentry.fullname" . }}-sentry

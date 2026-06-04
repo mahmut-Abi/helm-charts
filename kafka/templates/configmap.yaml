@@ -1,0 +1,83 @@
+{{- include "kafka.validateValues" . }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "kafka.fullname" . }}-config
+  labels:
+    {{- include "kafka.labels" . | nindent 4 }}
+data:
+  server.properties: |
+    # Kafka KRaft mode configuration
+    process.roles=broker,controller
+    node.id=${KAFKA_NODE_ID}
+
+    # Controller quorum voters
+    controller.quorum.voters={{ include "kafka.quorumVoters" . }}
+
+    # Listeners
+    listeners=PLAINTEXT://0.0.0.0:{{ .Values.service.externalPort }},CONTROLLER://0.0.0.0:{{ .Values.kraft.controllerPort }}
+    advertised.listeners=PLAINTEXT://{{ include "kafka.fullname" . }}-${KAFKA_NODE_ID}.{{ include "kafka.headlessServiceName" . }}.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.service.externalPort }},CONTROLLER://{{ include "kafka.fullname" . }}-${KAFKA_NODE_ID}.{{ include "kafka.headlessServiceName" . }}.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.kraft.controllerPort }}
+    listener.security.protocol.map=PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+    inter.broker.listener.name=PLAINTEXT
+    controller.listener.names=CONTROLLER
+
+    {{- if .Values.auth.enabled }}
+    # SASL/PLAIN authentication
+    sasl.enabled.mechanisms=PLAIN
+    sasl.mechanism.inter.broker.protocol=PLAIN
+    sasl.mechanism.controller.protocol=PLAIN
+    listener.name.plaintext.plain.sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required \
+      username="${KAFKA_INTER_BROKER_USER}" \
+      password="${KAFKA_INTER_BROKER_PASSWORD}" \
+      user_${KAFKA_INTER_BROKER_USER}="${KAFKA_INTER_BROKER_PASSWORD}"{{- range .Values.auth.clientUsers }} \
+      user_{{ .user }}="{{ .password }}"{{- end }};
+    listener.name.plaintext.sasl.enabled.mechanisms=PLAIN
+    listener.name.controller.plain.sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required \
+      username="${KAFKA_INTER_BROKER_USER}" \
+      password="${KAFKA_INTER_BROKER_PASSWORD}" \
+      user_${KAFKA_INTER_BROKER_USER}="${KAFKA_INTER_BROKER_PASSWORD}";
+    listener.name.controller.sasl.enabled.mechanisms=PLAIN
+    {{- end }}
+
+    # Topic auto-creation (allows producers to create topics on first write)
+    auto.create.topics.enable=true
+
+    # Log directories
+    log.dirs=/var/lib/kafka/data
+    {{- if .Values.kraft.metadataLogDir }}
+    metadata.log.dir={{ .Values.kraft.metadataLogDir }}
+    {{- else if .Values.persistence.kraftDedicated }}
+    metadata.log.dir=/var/lib/kafka/kraft
+    {{- end }}
+
+    # Default replication and retention
+    num.partitions={{ mul (int .Values.replicas) 3 }}
+    default.replication.factor={{ min (int .Values.replicas) 3 }}
+    min.insync.replicas={{ min (sub (int .Values.replicas) 1) 2 }}
+    offsets.topic.replication.factor={{ min (int .Values.replicas) 3 }}
+    transaction.state.log.replication.factor={{ min (int .Values.replicas) 3 }}
+    transaction.state.log.min.isr={{ min (sub (int .Values.replicas) 1) 2 }}
+
+    # Networking
+    socket.send.buffer.bytes=1048576
+    socket.receive.buffer.bytes=1048576
+    socket.request.max.bytes=104857600
+    message.max.bytes={{ .Values.maxMessageBytes }}
+    replica.fetch.max.bytes={{ .Values.maxMessageBytes }}
+    max.partition.fetch.bytes={{ .Values.maxMessageBytes }}
+    fetch.max.bytes={{ .Values.maxMessageBytes }}
+    num.network.threads=6
+    num.io.threads=16
+    num.replica.fetchers=2
+
+    # Log retention
+    log.retention.hours=168
+    log.segment.bytes=1073741824
+    log.retention.check.interval.ms=300000
+
+    # Data safety
+    unclean.leader.election.enable=false
+
+    {{- range $key, $value := .Values.extraServerProperties }}
+    {{ $key }}={{ $value }}
+    {{- end }}

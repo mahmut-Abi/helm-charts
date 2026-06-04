@@ -1,0 +1,72 @@
+{{- if .Values.cluster.enabled }}
+{{- include "postgres.validateValues" . }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "postgres.fullname" . }}-cluster
+  labels:
+    {{- include "postgres.labels" . | nindent 4 }}
+data:
+  init-replication.sh: |
+    #!/bin/bash
+    set -e
+
+    psql -v ON_ERROR_STOP=1 \
+      --username "$POSTGRES_USER" \
+      --dbname "$POSTGRES_DB" \
+      -v replication_user="$POSTGRES_REPLICATION_USER" \
+      -v replication_password="$POSTGRES_REPLICATION_PASSWORD" <<'EOSQL'
+    SELECT format('CREATE ROLE %I WITH REPLICATION LOGIN PASSWORD %L', :'replication_user', :'replication_password')
+    WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = :'replication_user') \gexec
+    EOSQL
+  primary-entrypoint.sh: |
+    #!/bin/bash
+    set -euo pipefail
+
+    # On restart (PGDATA exists), ensure pg_hba.conf has replication entries.
+    # On first boot (PGDATA empty), docker-entrypoint-initdb.d runs init-replication.sh
+    # which creates the replicator role; this wrapper ensures pg_hba.conf is always correct.
+    if [ -s "$PGDATA/PG_VERSION" ]; then
+      if ! grep -q "host replication ${POSTGRES_REPLICATION_USER}" "$PGDATA/pg_hba.conf" 2>/dev/null; then
+        echo "Adding replication entries to pg_hba.conf"
+        {
+          echo ""
+          echo "# Replication entries managed by chart"
+          echo "host replication ${POSTGRES_REPLICATION_USER} 0.0.0.0/0 scram-sha-256"
+          echo "host replication ${POSTGRES_REPLICATION_USER} ::/0 scram-sha-256"
+        } >> "$PGDATA/pg_hba.conf"
+      fi
+    fi
+
+    exec docker-entrypoint.sh postgres
+  entrypoint.sh: |
+    #!/bin/bash
+    set -euo pipefail
+
+    if [ ! -s "$PGDATA/PG_VERSION" ]; then
+      echo "Bootstrapping PostgreSQL replica ${HOSTNAME} from ${POSTGRES_PRIMARY_HOST}"
+      until pg_isready -h "$POSTGRES_PRIMARY_HOST" -p "{{ .Values.service.port }}" -U "$POSTGRES_REPLICATION_USER"; do
+        sleep "{{ int .Values.cluster.replicaBootstrapCheckIntervalSeconds }}"
+      done
+
+      export PGPASSWORD="$POSTGRES_REPLICATION_PASSWORD"
+      find "$PGDATA" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+      pg_basebackup \
+        -h "$POSTGRES_PRIMARY_HOST" \
+        -p "{{ .Values.service.port }}" \
+        -D "$PGDATA" \
+        -U "$POSTGRES_REPLICATION_USER" \
+        -v \
+        -P \
+        -R \
+        -X stream
+
+      chmod 700 "$PGDATA"
+      {
+        echo "primary_conninfo = 'host=${POSTGRES_PRIMARY_HOST} port={{ .Values.service.port }} user=${POSTGRES_REPLICATION_USER} password=${POSTGRES_REPLICATION_PASSWORD} application_name={{ .Values.cluster.primaryConninfoApplicationName }}'"
+        echo "hot_standby = on"
+      } >> "$PGDATA/postgresql.auto.conf"
+    fi
+
+    exec docker-entrypoint.sh postgres
+{{- end }}

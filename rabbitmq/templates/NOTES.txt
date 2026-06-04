@@ -1,0 +1,34 @@
+RabbitMQ has been deployed.
+
+Release name:
+  {{ .Release.Name }}
+
+Service:
+  AMQP:    {{ include "rabbitmq.fullname" . }}:{{ .Values.service.amqpPort }}
+  Management: {{ include "rabbitmq.fullname" . }}:{{ .Values.service.managementPort }}
+
+{{- if .Values.cluster.enabled }}
+Cluster mode is enabled.
+
+Nodes ({{ .Values.cluster.replicas }}):
+  {{ include "rabbitmq.fullname" . }}-0 through {{ include "rabbitmq.fullname" . }}-{{ sub (.Values.cluster.replicas | int) 1 }}
+
+Nodes discover each other via EPMD (port {{ .Values.service.epmdPort }}) using
+the shared Erlang cookie. Pod-0 starts first; followers wait for EPMD then
+join via rabbitmqctl join_cluster.
+
+Check cluster status:
+  kubectl exec -n {{ .Release.Namespace }} {{ include "rabbitmq.fullname" . }}-0 -- rabbitmqctl cluster_status
+{{- end }}
+
+{{- if not (eq .Values.auth.existingSecret "") }}
+Using existing secret: {{ .Values.auth.existingSecret }}
+{{- else }}
+Secret created: {{ include "rabbitmq.secretName" . }}
+Get admin password:
+  kubectl get secret {{ include "rabbitmq.secretName" . }} -o jsonpath="{.data.RABBITMQ_DEFAULT_PASS}" | base64 -d
+{{- end }}
+
+Connect from inside the cluster:
+  AMQP:    amqp://{{ .Values.auth.defaultUser }}:<password>@{{ include "rabbitmq.fullname" . }}:{{ .Values.service.amqpPort }}
+  Management UI: http://{{ include "rabbitmq.fullname" . }}:{{ .Values.service.managementPort }}

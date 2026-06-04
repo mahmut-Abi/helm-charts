@@ -1,0 +1,170 @@
+{{- if and .Values.cluster.enabled .Values.keeper.enabled }}
+{{- include "clickhouse.validateValues" . }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "clickhouse.keeperFullname" . }}
+  labels:
+    {{- include "clickhouse.keeperLabels" . | nindent 4 }}
+spec:
+  replicas: {{ int .Values.keeper.replicas }}
+  podManagementPolicy: Parallel
+  serviceName: {{ include "clickhouse.keeperHeadlessServiceName" . }}
+  selector:
+    matchLabels:
+      {{- include "clickhouse.keeperSelectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "clickhouse.keeperSelectorLabels" . | nindent 8 }}
+    spec:
+      automountServiceAccountToken: false
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.keeper.podSecurityContext | nindent 8 }}
+      initContainers:
+        {{- if .Values.volumePermissions.enabled }}
+        - name: volume-permissions
+          image: "{{ .Values.keeper.image.repository }}:{{ .Values.keeper.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.keeper.image.pullPolicy }}
+          command:
+            - /bin/sh
+            - -ec
+          args:
+            - |
+              chown -R {{ .Values.keeper.containerSecurityContext.runAsUser }}:{{ .Values.keeper.containerSecurityContext.runAsGroup }} /var/lib/clickhouse-keeper
+              chmod 750 /var/lib/clickhouse-keeper
+          securityContext:
+            {{- toYaml .Values.volumePermissions.securityContext | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/clickhouse-keeper
+        {{- end }}
+        - name: generate-keeper-config
+          image: "{{ .Values.cluster.configGeneratorImage.repository }}:{{ .Values.cluster.configGeneratorImage.tag }}"
+          imagePullPolicy: {{ .Values.cluster.configGeneratorImage.pullPolicy }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            runAsNonRoot: true
+            runAsUser: 65534
+            runAsGroup: 65534
+            seccompProfile:
+              type: RuntimeDefault
+          command:
+            - /bin/sh
+            - -ec
+          args:
+            - |
+              ordinal="${HOSTNAME##*-}"
+              server_id=$((ordinal + 1))
+
+              cat > /generated/keeper_config.xml <<EOF
+              <clickhouse>
+                <listen_host>0.0.0.0</listen_host>
+                <interserver_listen_host>0.0.0.0</interserver_listen_host>
+                <logger>
+                  <level>information</level>
+                  <console>true</console>
+                </logger>
+                <keeper_server>
+                  <tcp_port>{{ .Values.keeper.clientPort }}</tcp_port>
+                  <server_id>${server_id}</server_id>
+                  <log_storage_path>{{ .Values.keeper.storage.logPath }}</log_storage_path>
+                  <snapshot_storage_path>{{ .Values.keeper.storage.snapshotPath }}</snapshot_storage_path>
+                  <coordination_settings>
+                    <operation_timeout_ms>{{ .Values.keeper.operationTimeoutMs }}</operation_timeout_ms>
+                    <session_timeout_ms>{{ .Values.keeper.sessionTimeoutMs }}</session_timeout_ms>
+                  </coordination_settings>
+                  <raft_configuration>
+              {{- range $keeperIndex := until (int .Values.keeper.replicas) }}
+                    <server>
+                      <id>{{ add $keeperIndex 1 }}</id>
+                      <hostname>{{ printf "%s-%d.%s.%s.svc.%s" (include "clickhouse.keeperFullname" $) $keeperIndex (include "clickhouse.keeperHeadlessServiceName" $) $.Release.Namespace $.Values.cluster.clusterDomain }}</hostname>
+                      <port>{{ $.Values.keeper.raftPort }}</port>
+                    </server>
+              {{- end }}
+                  </raft_configuration>
+                </keeper_server>
+              </clickhouse>
+              EOF
+          volumeMounts:
+            - name: generated-config
+              mountPath: /generated
+      containers:
+        - name: keeper
+          image: "{{ .Values.keeper.image.repository }}:{{ .Values.keeper.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.keeper.image.pullPolicy }}
+          command:
+            - clickhouse-keeper
+            - --config-file=/etc/clickhouse-keeper/keeper_config.xml
+          securityContext:
+            {{- toYaml .Values.keeper.containerSecurityContext | nindent 12 }}
+          ports:
+            - name: keeper
+              containerPort: {{ .Values.keeper.clientPort }}
+              protocol: TCP
+            - name: keeper-raft
+              containerPort: {{ .Values.keeper.raftPort }}
+              protocol: TCP
+          livenessProbe:
+            tcpSocket:
+              port: keeper
+            initialDelaySeconds: 60
+            periodSeconds: 10
+            failureThreshold: 12
+          readinessProbe:
+            tcpSocket:
+              port: keeper
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            failureThreshold: 12
+          resources:
+            {{- toYaml .Values.keeper.resources | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/clickhouse-keeper
+            - name: tmp
+              mountPath: /tmp
+            - name: keeper-log
+              mountPath: /var/log/clickhouse-keeper
+            - name: generated-config
+              mountPath: /etc/clickhouse-keeper/keeper_config.xml
+              subPath: keeper_config.xml
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: keeper-log
+          emptyDir: {}
+        - name: generated-config
+          emptyDir: {}
+        {{- if not .Values.keeper.persistence.enabled }}
+        - name: data
+          emptyDir: {}
+        {{- end }}
+  {{- if .Values.keeper.persistence.enabled }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          {{- include "clickhouse.keeperLabels" . | nindent 10 }}
+        {{- with .Values.keeper.persistence.annotations }}
+        annotations:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+      spec:
+        accessModes:
+          {{- toYaml .Values.keeper.persistence.accessModes | nindent 10 }}
+        {{- if .Values.keeper.persistence.storageClass }}
+        storageClassName: {{ ternary "" .Values.keeper.persistence.storageClass (eq .Values.keeper.persistence.storageClass "-") | quote }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.keeper.persistence.size | quote }}
+  {{- end }}
+{{- end }}

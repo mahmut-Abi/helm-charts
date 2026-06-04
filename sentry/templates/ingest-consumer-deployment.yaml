@@ -1,0 +1,116 @@
+{{- if .Values.ingestConsumer.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "sentry.fullname" . }}-ingest-consumer
+  labels:
+    {{- include "sentry.workerSelectorLabels" . | nindent 4 }}
+    {{- include "sentry.labels" . | nindent 4 }}
+    app.kubernetes.io/component: ingest-consumer
+spec:
+  replicas: {{ .Values.ingestConsumer.replicas }}
+  selector:
+    matchLabels:
+      {{- include "sentry.workerSelectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: ingest-consumer
+  template:
+    metadata:
+      labels:
+        {{- include "sentry.workerSelectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: ingest-consumer
+        {{- with .Values.ingestConsumer.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.ingestConsumer.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      automountServiceAccountToken: false
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: ingest-consumer
+          image: {{ include "sentry.workerImage" . }}
+          imagePullPolicy: {{ .Values.image.sentry.pullPolicy }}
+          command: ["sentry", "run", "consumer", "ingest-events", "--consumer-group", "ingest-consumer"]
+          env:
+            - name: SENTRY_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "sentry.secretName" . }}
+                  key: SENTRY_SECRET_KEY
+            - name: SENTRY_DB_NAME
+              value: {{ .Values.postgres.database | quote }}
+            - name: SENTRY_DB_USER
+              value: {{ .Values.postgres.user | quote }}
+            - name: SENTRY_DB_PASSWORD
+            {{- if .Values.postgres.password }}
+              value: {{ .Values.postgres.password | quote }}
+            {{- else if .Values.postgres.existingSecret }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.postgres.existingSecret }}
+                  key: {{ .Values.postgres.existingSecretKey | default "password" }}
+            {{- else }}
+              value: ""
+            {{- end }}
+            - name: SENTRY_POSTGRES_HOST
+              value: {{ .Values.postgres.host | quote }}
+            - name: SENTRY_POSTGRES_PORT
+              value: {{ .Values.postgres.port | quote }}
+            - name: SENTRY_REDIS_HOST
+              value: {{ .Values.redis.host | quote }}
+            - name: SENTRY_REDIS_PORT
+              value: {{ .Values.redis.port | quote }}
+            - name: SENTRY_REDIS_PASSWORD
+            {{- if .Values.redis.password }}
+              value: {{ .Values.redis.password | quote }}
+            {{- else if .Values.redis.existingSecret }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.redis.existingSecret }}
+                  key: {{ .Values.redis.existingSecretKey | default "redis-password" }}
+            {{- else }}
+              value: ""
+            {{- end }}
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              value: {{ .Values.kafka.bootstrapServers | quote }}
+            - name: SENTRY_CONF
+              value: /etc/sentry
+            {{- if .Values.relay.enabled }}
+            - name: SENTRY_RELAY_HOST
+              value: {{ include "sentry.fullname" . }}-relay
+            - name: SENTRY_RELAY_PORT
+              value: {{ .Values.relay.port | quote }}
+            {{- end }}
+            {{- with .Values.ingestConsumer.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          volumeMounts:
+            - name: sentry-conf
+              mountPath: /etc/sentry
+              readOnly: true
+          {{- with .Values.ingestConsumer.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      volumes:
+        - name: sentry-conf
+          configMap:
+            name: {{ include "sentry.fullname" . }}-sentry
+      {{- with .Values.ingestConsumer.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.ingestConsumer.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.ingestConsumer.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

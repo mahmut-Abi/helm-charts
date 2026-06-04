@@ -1,0 +1,70 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "tempo.fullname" . }}-config
+  labels:
+    {{- include "tempo.labels" . | nindent 4 }}
+data:
+  tempo.yaml: |
+    server:
+      http_listen_port: {{ .Values.tempo.httpListenPort }}
+      grpc_listen_port: {{ .Values.tempo.grpcListenPort }}
+    distributor:
+      receivers:
+        otlp:
+          protocols:
+            grpc:
+              endpoint: {{ .Values.tempo.distributor.receivers.otlp.protocols.grpc.endpoint | quote }}
+            http:
+              endpoint: {{ .Values.tempo.distributor.receivers.otlp.protocols.http.endpoint | quote }}
+    ingester:
+      trace_idle_period: {{ .Values.tempo.ingester.traceIdlePeriod }}
+      max_block_bytes: {{ .Values.tempo.ingester.maxBlockBytes }}
+      max_block_duration: {{ .Values.tempo.ingester.maxBlockDuration }}
+    compactor:
+      compaction:
+        block_retention: {{ .Values.tempo.compactor.compaction.blockRetention }}
+        compacted_block_retention: {{ .Values.tempo.compactor.compaction.compactedBlockRetention }}
+    querier:
+      frontend_worker:
+        frontend_address: {{ .Values.tempo.querier.frontendWorker.frontendAddress | quote }}
+    query_frontend:
+      max_outstanding_per_tenant: {{ .Values.tempo.queryFrontend.maxOutstandingPerTenant }}
+    {{- if .Values.tempo.metricsGenerator.enabled }}
+    metrics_generator:
+      registry:
+        external_labels:
+          {{- range $k, $v := .Values.tempo.metricsGenerator.registry.externalLabels }}
+          {{ $k }}: {{ $v | quote }}
+          {{- end }}
+      storage:
+        path: {{ .Values.tempo.metricsGenerator.storage.path }}
+        {{- with .Values.tempo.metricsGenerator.remoteWrite }}
+        remote_write:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+      processor:
+        {{- toYaml .Values.tempo.metricsGenerator.processors | nindent 8 }}
+      {{- end }}
+    storage:
+      trace:
+        backend: {{ .Values.storage.backend }}
+        {{- if eq .Values.storage.backend "local" }}
+        local:
+          path: {{ .Values.storage.local.data.path }}
+        {{- end }}
+        {{- if eq .Values.storage.backend "s3" }}
+        s3:
+          bucket: {{ .Values.storage.s3.bucket }}
+          endpoint: {{ .Values.storage.s3.endpoint }}
+          access_key: {{ .Values.storage.s3.accessKey }}
+          secret_key: {{ .Values.storage.s3.secretKey }}
+          region: {{ .Values.storage.s3.region }}
+          insecure: {{ .Values.storage.s3.insecure }}
+        {{- end }}
+        wal:
+          path: {{ .Values.storage.local.wal.path }}
+    {{- if .Values.tempo.overrides }}
+    overrides:
+      {{- toYaml .Values.tempo.overrides | nindent 6 }}
+    {{- end }}

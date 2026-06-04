@@ -1,0 +1,125 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "tempo.fullname" . }}
+  labels:
+    {{- include "tempo.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  strategy:
+    {{- toYaml .Values.updateStrategy | nindent 4 }}
+  selector:
+    matchLabels:
+      {{- include "tempo.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "tempo.selectorLabels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      automountServiceAccountToken: false
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
+      containers:
+        - name: tempo
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command:
+            - /tempo
+          args:
+            - -config.file=/etc/tempo/tempo.yaml
+            {{- with .Values.extraArgs }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          ports:
+            - name: otlp-grpc
+              containerPort: {{ .Values.service.otlpGrpcPort }}
+              protocol: TCP
+            - name: otlp-http
+              containerPort: {{ .Values.service.otlpHttpPort }}
+              protocol: TCP
+            - name: tempo-http
+              containerPort: {{ .Values.service.tempoHttpPort }}
+              protocol: TCP
+            - name: tempo-metrics
+              containerPort: {{ .Values.service.tempoMetricsPort }}
+              protocol: TCP
+            - name: tempo-grpc
+              containerPort: {{ .Values.tempo.grpcListenPort }}
+              protocol: TCP
+          {{- with .Values.extraEnv }}
+          env:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- if .Values.livenessProbe.enabled }}
+          livenessProbe:
+            httpGet:
+              path: /ready
+              port: tempo-http
+            initialDelaySeconds: {{ .Values.livenessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.livenessProbe.periodSeconds }}
+          {{- end }}
+          {{- if .Values.readinessProbe.enabled }}
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: tempo-http
+            initialDelaySeconds: {{ .Values.readinessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.readinessProbe.periodSeconds }}
+          {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/tempo
+            {{- if eq .Values.storage.backend "local" }}
+            {{- if or .Values.storage.local.data.persistence.enabled .Values.storage.local.data.persistence.existingClaim }}
+            - name: data
+              mountPath: {{ .Values.storage.local.data.path }}
+            {{- end }}
+            {{- if or .Values.storage.local.wal.persistence.enabled .Values.storage.local.wal.persistence.existingClaim }}
+            - name: wal
+              mountPath: {{ .Values.storage.local.wal.path }}
+            {{- end }}
+            {{- end }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "tempo.fullname" . }}-config
+        {{- if eq .Values.storage.backend "local" }}
+        {{- if or .Values.storage.local.data.persistence.enabled .Values.storage.local.data.persistence.existingClaim }}
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ .Values.storage.local.data.persistence.existingClaim | default (printf "%s-data" (include "tempo.fullname" .)) }}
+        {{- end }}
+        {{- if or .Values.storage.local.wal.persistence.enabled .Values.storage.local.wal.persistence.existingClaim }}
+        - name: wal
+          persistentVolumeClaim:
+            claimName: {{ .Values.storage.local.wal.persistence.existingClaim | default (printf "%s-wal" (include "tempo.fullname" .)) }}
+        {{- end }}
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

@@ -1,0 +1,27 @@
+{{- if eq .Values.filestore.backend "filesystem" }}
+{{- if and .Values.filestore.filesystem.persistence.enabled (not .Values.filestore.filesystem.persistence.existingClaim) }}
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: {{ include "sentry.fullname" . }}-data
+  labels:
+    {{- include "sentry.labels" . | nindent 4 }}
+  {{- with .Values.filestore.filesystem.persistence.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  accessModes:
+    - {{ .Values.filestore.filesystem.persistence.accessMode | quote }}
+  resources:
+    requests:
+      storage: {{ .Values.filestore.filesystem.persistence.size | quote }}
+  {{- if .Values.filestore.filesystem.persistence.storageClass }}
+  {{- if eq "-" .Values.filestore.filesystem.persistence.storageClass }}
+  storageClassName: ""
+  {{- else }}
+  storageClassName: {{ .Values.filestore.filesystem.persistence.storageClass | quote }}
+  {{- end }}
+  {{- end }}
+{{- end }}
+{{- end }}

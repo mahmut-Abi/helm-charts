@@ -1,0 +1,174 @@
+image:
+  repository: grafana/tempo
+  tag: "2.7.1"
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+# Number of replicas. For monolithic mode, keep at 1.
+replicaCount: 1
+
+# Tempo server configuration.
+tempo:
+  # HTTP API port for queries and the Tempo API.
+  httpListenPort: 3200
+  # gRPC port for internal component communication.
+  grpcListenPort: 9095
+
+  # Distributor receives spans from OpenTelemetry SDKs/Collectors.
+  distributor:
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: "0.0.0.0:4317"
+          http:
+            endpoint: "0.0.0.0:4318"
+
+  # Ingester buffers spans in memory and writes WAL to disk.
+  ingester:
+    traceIdlePeriod: 10s
+    maxBlockBytes: 1000000
+    maxBlockDuration: 30m
+
+  # Compactor reduces block count by merging smaller blocks.
+  compactor:
+    compaction:
+      blockRetention: 48h
+      compactedBlockRetention: 1h
+
+  # Querier searches for traces across ingesters and backend storage.
+  querier:
+    frontendWorker:
+      frontendAddress: "127.0.0.1:9095"
+
+  # Query Frontend coordinates search requests and caches results.
+  queryFrontend:
+    maxOutstandingPerTenant: 2000
+
+  # Metrics Generator produces RED metrics from span data.
+  metricsGenerator:
+    enabled: false
+    registry:
+      externalLabels:
+        source: tempo
+    storage:
+      path: /var/tempo/generator/wal
+    remoteWrite: []
+    #  - url: http://prometheus:9090/api/v1/write
+    processors:
+      service_graphs: {}
+      span_metrics: {}
+    # collection_interval moved to overrides in Tempo 2.x — see overrides.defaults.metrics_generator
+
+  # Overrides (per-tenant configuration).
+  overrides: {}
+
+# Storage backend for trace data.
+storage:
+  # Backend type: local or s3.
+  backend: local
+
+  # Local filesystem storage.
+  local:
+    # Trace data storage.
+    data:
+      path: /var/tempo/traces
+      persistence:
+        enabled: true
+        size: 10Gi
+        accessMode: ReadWriteOnce
+        storageClass: ""
+        existingClaim: ""
+        annotations: {}
+
+    # WAL (Write-Ahead Log) storage — should use faster storage.
+    wal:
+      path: /var/tempo/wal
+      persistence:
+        enabled: true
+        size: 5Gi
+        accessMode: ReadWriteOnce
+        storageClass: ""
+        existingClaim: ""
+        annotations: {}
+
+  # S3-compatible storage.
+  s3:
+    bucket: ""
+    endpoint: ""
+    accessKey: ""
+    secretKey: ""
+    region: us-east-1
+    insecure: false
+    existingSecret: ""
+
+# Service configuration.
+service:
+  type: ClusterIP
+  # OTLP gRPC port.
+  otlpGrpcPort: 4317
+  # OTLP HTTP port.
+  otlpHttpPort: 4318
+  # Tempo HTTP API port for querying traces.
+  tempoHttpPort: 3200
+  # Tempo metrics port.
+  tempoMetricsPort: 3100
+  annotations: {}
+
+# Resource configuration.
+resources:
+  requests:
+    cpu: 500m
+    memory: 1Gi
+  limits:
+    cpu: 2
+    memory: 2Gi
+
+# Probe configuration.
+readinessProbe:
+  enabled: true
+  initialDelaySeconds: 10
+  periodSeconds: 10
+
+livenessProbe:
+  enabled: true
+  initialDelaySeconds: 30
+  periodSeconds: 20
+
+podAnnotations: {}
+podLabels: {}
+
+podSecurityContext:
+  fsGroup: 10001
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: false
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  seccompProfile:
+    type: RuntimeDefault
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+updateStrategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxUnavailable: 1
+
+terminationGracePeriodSeconds: 30
+
+# Additional command-line arguments.
+extraArgs: []
+
+# Additional environment variables.
+extraEnv: []

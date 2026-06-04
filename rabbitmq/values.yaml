@@ -1,0 +1,140 @@
+# Number of RabbitMQ instances used when cluster.enabled is false.
+replicaCount: 1
+
+image:
+  # Official RabbitMQ 4.0 image with management plugin.
+  repository: rabbitmq
+  tag: "4.0-management"
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+auth:
+  # Change these values before using the chart in production.
+  defaultUser: admin
+  # defaultPass: ""  -- must be set explicitly or use existingSecret
+  defaultPass: ""
+  # Erlang cookie used for inter-node authentication in cluster mode.
+  # Auto-generated if left empty for standalone mode; must be set for clusters.
+  # erlangCookie: ""  -- must be set explicitly or use existingSecret
+  erlangCookie: ""
+  # Set this to use a pre-created Secret instead of rendering secret.yaml.
+  # The Secret must contain keys RABBITMQ_DEFAULT_USER, RABBITMQ_DEFAULT_PASS,
+  # and RABBITMQ_ERLANG_COOKIE.
+  existingSecret: ""
+
+service:
+  type: ClusterIP
+  annotations: {}
+  # AMQP port for messaging clients.
+  amqpPort: 5672
+  # Management plugin HTTP API and UI.
+  managementPort: 15672
+  # Erlang Port Mapper Daemon used by clustering.
+  epmdPort: 4369
+
+headlessService:
+  annotations: {}
+
+cluster:
+  # Enable RabbitMQ clustering. Nodes discover each other via EPMD using
+  # the shared Erlang cookie and stable StatefulSet DNS names.
+  enabled: false
+  replicas: 3
+  # Internal Erlang distribution port. Default 25672 is standard.
+  distPort: 25672
+
+persistence:
+  enabled: true
+  size: 8Gi
+  storageClass: ""
+  accessModes:
+    - ReadWriteOnce
+  annotations: {}
+
+volumePermissions:
+  enabled: true
+  image:
+    repository: rabbitmq
+    tag: "4.0-management"
+    pullPolicy: IfNotPresent
+  securityContext:
+    runAsUser: 0
+    runAsGroup: 0
+    runAsNonRoot: false
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
+      add:
+        - CHOWN
+        - FOWNER
+    seccompProfile:
+      type: RuntimeDefault
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+readinessProbe:
+  enabled: true
+  initialDelaySeconds: 15
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 6
+
+livenessProbe:
+  enabled: true
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 6
+
+podAnnotations: {}
+podLabels: {}
+
+podSecurityContext:
+  fsGroup: 999
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  runAsNonRoot: true
+  runAsUser: 999
+  runAsGroup: 999
+  seccompProfile:
+    type: RuntimeDefault
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+updateStrategy:
+  type: RollingUpdate
+
+terminationGracePeriodSeconds: 60
+
+# Ingress (standard Kubernetes Ingress) for the management UI.
+ingress:
+  enabled: false
+  className: nginx
+  hostname: ""
+  additionalHostNames: []
+  labels: {}
+  annotations: {}
+  tls: []
+
+# Gateway API (HTTPRoute) for the management UI. Mutually exclusive with ingress.
+gateway:
+  enabled: false
+  gatewayName: ""
+  gatewayNamespace: ""
+  hostname: ""

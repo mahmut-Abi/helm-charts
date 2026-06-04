@@ -1,0 +1,6 @@
+apiVersion: v2
+name: sentry
+description: A Helm chart for Sentry — open-source error tracking and application monitoring.
+type: application
+version: 0.2.1
+appVersion: "26.5.0"

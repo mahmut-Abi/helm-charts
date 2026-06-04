@@ -1,0 +1,107 @@
+# Number of Redis pods used when cluster.enabled is false.
+replicaCount: 1
+
+image:
+  # Official Redis image repository.
+  repository: redis
+  # Pin to a stable Redis tag. Override when you need a specific version.
+  tag: "7.4.2"
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+nameOverride: ""
+fullnameOverride: ""
+
+auth:
+  # Enable Redis password authentication.
+  enabled: true
+  # Redis password. When auth.enabled is true, set this before installing in production.
+  # password: ""  -- must be set explicitly or use existingSecret
+  password: "change-me"
+  # Set this to use a pre-created Secret instead of rendering secret.yaml.
+  # The Secret must contain key "redis-password".
+  existingSecret: ""
+
+service:
+  # ClusterIP is appropriate for in-cluster access.
+  type: ClusterIP
+  port: 6379
+  # Optional annotations for the client-facing Service.
+  annotations: {}
+  # Optional annotations for the headless Service used by the StatefulSet.
+  headlessAnnotations: {}
+
+cluster:
+  # Standalone mode stays the default. Enable this for Redis Cluster.
+  enabled: false
+  # Number of master nodes. Redis Cluster requires at least 3 masters.
+  masters: 3
+  # Replica count per master. Set to 0 for master-only clusters.
+  replicasPerMaster: 1
+  clusterDomain: cluster.local
+  busPort: 16379
+  nodeTimeoutMs: 5000
+  # Use stable StatefulSet DNS names in MOVED/ASK responses.
+  preferredEndpointType: hostname
+  # Optional job settings for the post-install/post-upgrade cluster bootstrap.
+  initJob:
+    enabled: true
+    backoffLimit: 20
+    activeDeadlineSeconds: 600
+    annotations: {}
+    podAnnotations: {}
+    podLabels: {}
+
+persistence:
+  # Enable a PersistentVolumeClaim for Redis data.
+  enabled: true
+  size: 8Gi
+  # Leave empty to use the cluster default StorageClass. Set to "-" to disable dynamic provisioning.
+  storageClass: ""
+  accessModes:
+    - ReadWriteOnce
+  annotations: {}
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+podAnnotations: {}
+podLabels: {}
+
+podSecurityContext:
+  fsGroup: 999
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 999
+  runAsGroup: 999
+  seccompProfile:
+    type: RuntimeDefault
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+updateStrategy:
+  type: RollingUpdate
+
+terminationGracePeriodSeconds: 30
+
+# Leave empty to use OrderedReady for standalone mode and Parallel for cluster
+# mode. Set explicitly to override either behavior.
+podManagementPolicy: ""
+
+redis:
+  # Extra command-line arguments appended to redis-server.
+  extraArgs: []

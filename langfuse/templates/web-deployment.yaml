@@ -1,0 +1,157 @@
+{{- if .Values.web.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "langfuse.fullname" . }}-web
+  labels:
+    {{- include "langfuse.webSelectorLabels" . | nindent 4 }}
+    {{- include "langfuse.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.web.replicas }}
+  selector:
+    matchLabels:
+      {{- include "langfuse.webSelectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "langfuse.webSelectorLabels" . | nindent 8 }}
+        {{- with .Values.web.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.web.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      automountServiceAccountToken: false
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: langfuse
+          image: {{ include "langfuse.webImage" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.web.port }}
+              protocol: TCP
+          env:
+            - name: SALT
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "langfuse.secretName" . }}
+                  key: SALT
+            - name: ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "langfuse.secretName" . }}
+                  key: ENCRYPTION_KEY
+            - name: NEXTAUTH_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "langfuse.secretName" . }}
+                  key: NEXTAUTH_SECRET
+            - name: NEXTAUTH_URL
+              value: {{ .Values.auth.nextauthUrl | quote }}
+            - name: DATABASE_URL
+              value: {{ include "langfuse.databaseUrl" . | quote }}
+            {{- if .Values.web.nodeOptions }}
+            - name: NODE_OPTIONS
+              value: {{ .Values.web.nodeOptions | quote }}
+            {{- end }}
+            {{- if .Values.clickhouse.url }}
+            - name: CLICKHOUSE_URL
+              value: {{ .Values.clickhouse.url | quote }}
+            {{- end }}
+            {{- if or .Values.clickhouse.migrationUrl .Values.clickhouse.url }}
+            - name: CLICKHOUSE_MIGRATION_URL
+              value: {{ include "langfuse.clickhouseMigrationUrl" . | quote }}
+            {{- end }}
+            - name: CLICKHOUSE_USER
+              value: {{ .Values.clickhouse.user | quote }}
+            {{- if .Values.clickhouse.password }}
+            - name: CLICKHOUSE_PASSWORD
+              value: {{ .Values.clickhouse.password | quote }}
+            {{- else if .Values.clickhouse.existingSecret }}
+            - name: CLICKHOUSE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.clickhouse.existingSecret }}
+                  key: {{ default "CLICKHOUSE_PASSWORD" .Values.clickhouse.existingSecretKey }}
+            {{- end }}
+            - name: CLICKHOUSE_DB
+              value: {{ .Values.clickhouse.database | quote }}
+            - name: CLICKHOUSE_CLUSTER_ENABLED
+              value: {{ .Values.clickhouse.clusterEnabled | quote }}
+            - name: CLICKHOUSE_MIGRATION_SSL
+              value: {{ .Values.clickhouse.tlsEnabled | quote }}
+            - name: LANGFUSE_AUTO_CLICKHOUSE_MIGRATION_DISABLED
+              value: {{ .Values.clickhouse.autoMigrationDisabled | quote }}
+            {{- if .Values.redis.connectionString }}
+            - name: REDIS_CONNECTION_STRING
+              value: {{ .Values.redis.connectionString | quote }}
+            {{- end }}
+            {{- if .Values.redis.host }}
+            - name: REDIS_HOST
+              value: {{ .Values.redis.host | quote }}
+            {{- end }}
+            {{- if .Values.redis.port }}
+            - name: REDIS_PORT
+              value: {{ .Values.redis.port | quote }}
+            {{- end }}
+            {{- if .Values.redis.tlsEnabled }}
+            - name: REDIS_TLS_ENABLED
+              value: "true"
+            {{- end }}
+            {{- if .Values.s3.enabled }}
+            - name: LANGFUSE_S3_EVENT_UPLOAD_BUCKET
+              value: {{ .Values.s3.bucket | quote }}
+            - name: LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT
+              value: {{ .Values.s3.endpoint | quote }}
+            - name: LANGFUSE_S3_EVENT_UPLOAD_REGION
+              value: {{ .Values.s3.region | quote }}
+            - name: LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID
+              value: {{ .Values.s3.accessKeyId | quote }}
+            - name: LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY
+              value: {{ .Values.s3.secretAccessKey | quote }}
+            - name: LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE
+              value: {{ .Values.s3.forcePathStyle | quote }}
+            {{- end }}
+            {{- range .Values.web.extraEnv }}
+            - name: {{ .name }}
+              value: {{ .value | quote }}
+            {{- end }}
+          resources:
+            {{- toYaml .Values.web.resources | nindent 12 }}
+          startupProbe:
+            httpGet:
+              path: /api/public/health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 60
+          livenessProbe:
+            httpGet:
+              path: /api/public/health
+              port: http
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /api/public/health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+      {{- with .Values.web.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.web.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.web.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

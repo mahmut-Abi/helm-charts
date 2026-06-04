@@ -1,0 +1,42 @@
+Redis has been deployed.
+
+Release name:
+  {{ .Release.Name }}
+
+Service:
+  {{ include "redis.fullname" . }}:{{ .Values.service.port }}
+
+{{- if .Values.cluster.enabled }}
+Redis Cluster mode is enabled.
+
+Masters:
+  {{ .Values.cluster.masters }}
+
+Replicas per master:
+  {{ .Values.cluster.replicasPerMaster }}
+
+StatefulSet pods:
+  {{ include "redis.replicaCount" . }}
+
+Headless endpoint pattern:
+  {{ include "redis.fullname" . }}-N.{{ include "redis.headlessServiceName" . }}.{{ .Release.Namespace }}.svc.{{ .Values.cluster.clusterDomain }}:{{ .Values.service.port }}
+
+{{- if .Values.cluster.initJob.enabled }}
+The {{ include "redis.fullname" . }}-cluster-init hook Job initializes the cluster with redis-cli --cluster create.
+{{- else }}
+Cluster init Job is disabled. Run redis-cli --cluster create manually after all pods are ready.
+{{- end }}
+
+{{- end }}
+{{- if .Values.auth.enabled }}
+Authentication is enabled. Get the password with:
+  kubectl get secret {{ include "redis.secretName" . }} -o jsonpath="{.data.redis-password}" | base64 -d
+
+Connect from inside the cluster:
+  redis-cli -h {{ include "redis.fullname" . }} -p {{ .Values.service.port }} -a "$REDIS_PASSWORD"
+{{- else }}
+Authentication is disabled.
+
+Connect from inside the cluster:
+  redis-cli -h {{ include "redis.fullname" . }} -p {{ .Values.service.port }}
+{{- end }}

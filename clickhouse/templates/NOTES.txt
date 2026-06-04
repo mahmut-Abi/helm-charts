@@ -1,0 +1,36 @@
+ClickHouse has been deployed.
+
+HTTP endpoint:
+  http://{{ include "clickhouse.fullname" . }}:{{ .Values.service.httpPort }}
+
+Native endpoint:
+  {{ include "clickhouse.fullname" . }}:{{ .Values.service.nativePort }}
+
+Credentials are stored in Secret:
+  {{ include "clickhouse.secretName" . }}
+
+{{- if .Values.cluster.enabled }}
+
+Cluster mode is enabled.
+
+Cluster name:
+  {{ .Values.cluster.name }}
+
+Shards:
+  {{ .Values.cluster.shards }}
+
+Replicas per shard:
+  {{ .Values.cluster.replicasPerShard }}
+
+StatefulSet pods:
+  {{ include "clickhouse.replicaCount" . }}
+
+{{- if .Values.keeper.enabled }}
+ClickHouse Keeper is deployed as a separate StatefulSet with {{ .Values.keeper.replicas }} pod(s).
+
+Keeper client endpoints:
+{{- range $keeperIndex := until (int .Values.keeper.replicas) }}
+  {{ include "clickhouse.keeperFullname" $ }}-{{ $keeperIndex }}.{{ include "clickhouse.keeperHeadlessServiceName" $ }}.{{ $.Release.Namespace }}.svc.{{ $.Values.cluster.clusterDomain }}:{{ $.Values.keeper.clientPort }}
+{{- end }}
+{{- end }}
+{{- end }}

@@ -1,0 +1,26 @@
+Grafana Tempo has been deployed.
+
+Release name:
+  {{ .Release.Name }}
+
+OTLP gRPC endpoint:
+  {{ include "tempo.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.service.otlpGrpcPort }}
+
+OTLP HTTP endpoint:
+  {{ include "tempo.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.service.otlpHttpPort }}
+
+Tempo HTTP API (query traces):
+  http://{{ include "tempo.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.service.tempoHttpPort }}
+
+Check Tempo health:
+  kubectl port-forward -n {{ .Release.Namespace }} svc/{{ include "tempo.fullname" . }} {{ .Values.service.tempoHttpPort }}:{{ .Values.service.tempoHttpPort }}
+  curl http://localhost:{{ .Values.service.tempoHttpPort }}/ready
+
+Search traces:
+  curl http://localhost:{{ .Values.service.tempoHttpPort }}/api/search?q={} | jq
+
+{{- if eq .Values.storage.backend "s3" }}
+{{- if not .Values.storage.s3.bucket }}
+WARNING: storage.backend is "s3" but storage.s3.bucket is empty. Set it to your S3 bucket name.
+{{- end }}
+{{- end }}

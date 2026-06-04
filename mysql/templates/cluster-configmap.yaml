@@ -1,0 +1,28 @@
+{{- if .Values.cluster.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "mysql.fullname" . }}-cluster
+  labels:
+    {{- include "mysql.labels" . | nindent 4 }}
+    app.kubernetes.io/component: cluster-config
+data:
+  configure-primary.sh: |-
+    #!/bin/bash
+    set -e
+
+    # Skip if replication user already exists.
+    if mysql -u root -p"$MYSQL_ROOT_PASSWORD" -e "SELECT 1 FROM mysql.user WHERE User='$MYSQL_REPLICATION_USER'" 2>/dev/null | grep -q 1; then
+      echo "Replication user $MYSQL_REPLICATION_USER already exists, skipping."
+      exit 0
+    fi
+
+    echo "Creating replication user $MYSQL_REPLICATION_USER."
+    mysql -u root -p"$MYSQL_ROOT_PASSWORD" <<EOSQL
+    CREATE USER '$MYSQL_REPLICATION_USER'@'%' IDENTIFIED BY '$MYSQL_REPLICATION_PASSWORD';
+    GRANT REPLICATION SLAVE ON *.* TO '$MYSQL_REPLICATION_USER'@'%';
+    FLUSH PRIVILEGES;
+    EOSQL
+
+    echo "Primary configuration completed."
+{{- end }}

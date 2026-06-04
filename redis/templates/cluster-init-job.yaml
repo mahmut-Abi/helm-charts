@@ -1,0 +1,104 @@
+{{- if and .Values.cluster.enabled .Values.cluster.initJob.enabled }}
+{{- include "redis.validateValues" . }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "redis.fullname" . }}-cluster-init
+  labels:
+    {{- include "redis.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "5"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+    {{- with .Values.cluster.initJob.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  backoffLimit: {{ .Values.cluster.initJob.backoffLimit }}
+  activeDeadlineSeconds: {{ .Values.cluster.initJob.activeDeadlineSeconds }}
+  template:
+    metadata:
+      labels:
+        helm.sh/chart: {{ include "redis.chart" . }}
+        app.kubernetes.io/managed-by: {{ .Release.Service }}
+        app.kubernetes.io/component: cluster-init
+        {{- with .Values.cluster.initJob.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.cluster.initJob.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      restartPolicy: OnFailure
+      automountServiceAccountToken: false
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: redis-cluster-init
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- if .Values.auth.enabled }}
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "redis.secretName" . }}
+                  key: redis-password
+          {{- end }}
+          command:
+            - /bin/sh
+            - -ec
+          args:
+            - |
+              replicas={{ include "redis.replicaCount" . }}
+              replicas_per_master={{ int .Values.cluster.replicasPerMaster }}
+              statefulset="{{ include "redis.fullname" . }}"
+              headless="{{ include "redis.headlessServiceName" . }}"
+              namespace="{{ .Release.Namespace }}"
+              cluster_domain="{{ .Values.cluster.clusterDomain }}"
+              port="{{ .Values.service.port }}"
+
+              host_for() {
+                echo "${statefulset}-$1.${headless}.${namespace}.svc.${cluster_domain}"
+              }
+
+              redis_cli() {
+              {{- if .Values.auth.enabled }}
+                redis-cli --no-auth-warning -a "$REDIS_PASSWORD" "$@"
+              {{- else }}
+                redis-cli "$@"
+              {{- end }}
+              }
+
+              first="$(host_for 0)"
+              echo "Waiting for Redis node ${first}:${port}"
+              until redis_cli -h "$first" -p "$port" PING >/dev/null 2>&1; do
+                sleep 2
+              done
+
+              cluster_info="$(redis_cli -h "$first" -p "$port" CLUSTER INFO 2>/dev/null || true)"
+              if echo "$cluster_info" | grep -q "cluster_state:ok"; then
+                echo "Redis Cluster is already initialized"
+                exit 0
+              fi
+
+              nodes=""
+              i=0
+              while [ "$i" -lt "$replicas" ]; do
+                host="$(host_for "$i")"
+                echo "Waiting for Redis node ${host}:${port}"
+                until redis_cli -h "$host" -p "$port" PING >/dev/null 2>&1; do
+                  sleep 2
+                done
+                nodes="${nodes} ${host}:${port}"
+                i=$((i + 1))
+              done
+
+              echo "Creating Redis Cluster with ${replicas} nodes and ${replicas_per_master} replica(s) per master"
+              redis_cli --cluster create ${nodes} --cluster-replicas "$replicas_per_master" --cluster-yes
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+{{- end }}

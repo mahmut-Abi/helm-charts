@@ -1,0 +1,162 @@
+# Default values for the OpenTelemetry Collector Helm chart.
+
+# Number of collector replicas.
+replicaCount: 1
+
+image:
+  # OpenTelemetry Collector image repository.
+  repository: otel/opentelemetry-collector-contrib
+  # Pin to a stable tag. Override when you need a specific version.
+  tag: "0.153.0"
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+# OpenTelemetry Collector configuration.
+# This generates the collector YAML config (receivers, processors, exporters, pipelines).
+config:
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: "0.0.0.0:4317"
+        http:
+          endpoint: "0.0.0.0:4318"
+    prometheus:
+      config:
+        scrape_configs:
+          - job_name: "otel-collector"
+            scrape_interval: 15s
+            static_configs:
+              - targets:
+                  - "localhost:8888"
+  processors:
+    batch:
+      send_batch_size: 1000
+      timeout: 10s
+      send_batch_max_size: 2000
+    memory_limiter:
+      check_interval: 1s
+      limit_mib: 512
+      spike_limit_mib: 128
+  exporters:
+    debug:
+      verbosity: basic
+    otlp:
+      endpoint: ""
+      tls:
+        insecure: true
+    prometheus:
+      endpoint: "0.0.0.0:8889"
+  extensions:
+    health_check:
+      endpoint: "0.0.0.0:13133"
+    pprof:
+      endpoint: "localhost:1777"
+  service:
+    extensions:
+      - health_check
+      - pprof
+    pipelines:
+      traces:
+        receivers:
+          - otlp
+        processors:
+          - memory_limiter
+          - batch
+        exporters:
+          - debug
+          - otlp
+      metrics:
+        receivers:
+          - otlp
+          - prometheus
+        processors:
+          - memory_limiter
+          - batch
+        exporters:
+          - debug
+          - otlp
+          - prometheus
+      logs:
+        receivers:
+          - otlp
+        processors:
+          - memory_limiter
+          - batch
+        exporters:
+          - debug
+          - otlp
+
+# Service configuration.
+service:
+  type: ClusterIP
+  # OTLP gRPC port.
+  otlpGrpcPort: 4317
+  # OTLP HTTP port.
+  otlpHttpPort: 4318
+  # Own metrics port (Prometheus scrape endpoint).
+  metricsPort: 8888
+  # Prometheus exporter port.
+  prometheusExportPort: 8889
+  # Health check extension port.
+  healthCheckPort: 13133
+  annotations: {}
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+readinessProbe:
+  enabled: true
+  initialDelaySeconds: 5
+  periodSeconds: 10
+
+livenessProbe:
+  enabled: true
+  initialDelaySeconds: 5
+  periodSeconds: 10
+
+podAnnotations: {}
+podLabels: {}
+
+podSecurityContext:
+  fsGroup: 10001
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  seccompProfile:
+    type: RuntimeDefault
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+updateStrategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxUnavailable: 1
+
+terminationGracePeriodSeconds: 30
+
+# Additional command-line arguments for the collector.
+extraArgs: []
+#  - --feature-gates=receiver.otlp.retry_on_failure
+
+# Additional environment variables.
+extraEnv: []
+#  - name: OTEL_RESOURCE_ATTRIBUTES
+#    value: "service.name=otel-collector"

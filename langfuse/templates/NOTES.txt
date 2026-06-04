@@ -1,0 +1,30 @@
+Langfuse has been deployed.
+
+Release name:
+  {{ .Release.Name }}
+
+Web endpoint:
+  http://{{ include "langfuse.fullname" . }}:{{ .Values.service.port }}
+  {{ .Values.auth.nextauthUrl }}
+
+{{- if .Values.web.enabled }}
+Web replicas: {{ .Values.web.replicas }}
+{{- end }}
+{{- if .Values.worker.enabled }}
+Worker replicas: {{ .Values.worker.replicas }}
+{{- end }}
+
+{{- if not (eq .Values.auth.existingSecret "") }}
+Using existing secret: {{ .Values.auth.existingSecret }}
+{{- else }}
+Secret created: {{ include "langfuse.secretName" . }}
+{{- end }}
+
+PostgreSQL: {{ include "langfuse.databaseUrl" . }}
+
+{{- if .Values.clickhouse.url }}
+ClickHouse: {{ .Values.clickhouse.url }}
+{{- end }}
+
+Health check:
+  curl http://{{ include "langfuse.fullname" . }}:{{ .Values.service.port }}/api/public/health
