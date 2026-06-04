@@ -13,7 +13,7 @@ data:
       host: 0.0.0.0
       port: {{ .Values.relay.port }}
     http:
-      timeout: 120
+      timeout: 300
     processing:
       enabled: true
       kafka_config:
