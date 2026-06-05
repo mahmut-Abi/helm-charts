@@ -106,9 +106,8 @@ web:
   # Pod-level security context.
   podSecurityContext: {}
   # Container-level security context for the main container.
-  # Set readOnlyRootFilesystem: true for stricter production security.
+  # Set readOnlyRootFilesystem: true and runAsNonRoot: true for stricter production security.
   securityContext:
-    runAsNonRoot: true
     allowPrivilegeEscalation: false
     capabilities:
       drop:
@@ -140,9 +139,8 @@ worker:
   # Pod-level security context.
   podSecurityContext: {}
   # Container-level security context for the main container.
-  # Set readOnlyRootFilesystem: true for stricter production security.
+  # Set readOnlyRootFilesystem: true and runAsNonRoot: true for stricter production security.
   securityContext:
-    runAsNonRoot: true
     allowPrivilegeEscalation: false
     capabilities:
       drop:
