@@ -34,11 +34,26 @@ spec:
         - name: init-clickhouse-db
           image: {{ printf "%s:%s" .Values.clickhouse.initContainerImage.repository .Values.clickhouse.initContainerImage.tag }}
           imagePullPolicy: {{ .Values.clickhouse.initContainerImage.pullPolicy }}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
           command:
             - sh
             - -c
             - |
-              until curl -sS "http://${CH_HOST}:8123/" --data-binary "CREATE DATABASE IF NOT EXISTS ${CH_DB}" -G --data-urlencode "user=${CH_USER}" --data-urlencode "password=${CH_PASSWORD}"; do
+              until curl -sS -u "${CH_USER}:${CH_PASSWORD}" "http://${CH_HOST}:8123/" --data-binary "CREATE DATABASE IF NOT EXISTS ${CH_DB}"; do
                 echo "Waiting for ClickHouse..."
                 sleep 2
               done
@@ -65,6 +80,10 @@ spec:
         - name: langfuse
           image: {{ include "langfuse.webImage" . }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- with .Values.web.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           ports:
             - name: http
               containerPort: {{ .Values.web.port }}
@@ -175,6 +194,10 @@ spec:
               port: http
             initialDelaySeconds: 5
             periodSeconds: 10
+      {{- with .Values.web.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       {{- with .Values.web.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

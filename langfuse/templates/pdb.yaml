@@ -1,0 +1,15 @@
+{{- if .Values.web.enabled }}
+{{- if gt (int .Values.web.replicas) 1 }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "langfuse.fullname" . }}-web
+  labels:
+    {{- include "langfuse.labels" . | nindent 4 }}
+spec:
+  minAvailable: {{ max 1 (sub (int .Values.web.replicas) 1) }}
+  selector:
+    matchLabels:
+      {{- include "langfuse.webSelectorLabels" . | nindent 6 }}
+{{- end }}
+{{- end }}
