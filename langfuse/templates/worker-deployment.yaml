@@ -36,12 +36,10 @@ spec:
           imagePullPolicy: {{ .Values.image.initContainer.pullPolicy }}
           securityContext:
             runAsNonRoot: true
-            runAsUser: 1000
             allowPrivilegeEscalation: false
             capabilities:
               drop:
                 - ALL
-            readOnlyRootFilesystem: true
           resources:
             requests:
               cpu: 50m

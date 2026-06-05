@@ -106,14 +106,13 @@ web:
   # Pod-level security context.
   podSecurityContext: {}
   # Container-level security context for the main container.
+  # Set readOnlyRootFilesystem: true for stricter production security.
   securityContext:
     runAsNonRoot: true
-    runAsUser: 1000
     allowPrivilegeEscalation: false
     capabilities:
       drop:
         - ALL
-    readOnlyRootFilesystem: true
   # Extra environment variables passed to the web container.
   extraEnv: []
 
@@ -141,14 +140,13 @@ worker:
   # Pod-level security context.
   podSecurityContext: {}
   # Container-level security context for the main container.
+  # Set readOnlyRootFilesystem: true for stricter production security.
   securityContext:
     runAsNonRoot: true
-    runAsUser: 1000
     allowPrivilegeEscalation: false
     capabilities:
       drop:
         - ALL
-    readOnlyRootFilesystem: true
   extraEnv: []
 
 service:
