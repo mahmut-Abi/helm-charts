@@ -4,8 +4,8 @@ image:
   pullPolicy: IfNotPresent
   # Init container image used to create the ClickHouse database before migrations.
   initContainer:
-    repository: curlimages/curl
-    tag: "8.17.1"
+    repository: alpine/curl
+    tag: "8.19.0"
     pullPolicy: IfNotPresent
 
 imagePullSecrets: []
