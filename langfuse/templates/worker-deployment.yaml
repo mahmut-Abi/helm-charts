@@ -35,7 +35,6 @@ spec:
           image: {{ printf "%s:%s" .Values.image.initContainer.repository .Values.image.initContainer.tag }}
           imagePullPolicy: {{ .Values.image.initContainer.pullPolicy }}
           securityContext:
-            runAsNonRoot: true
             allowPrivilegeEscalation: false
             capabilities:
               drop:
