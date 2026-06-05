@@ -28,6 +28,39 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      {{- if .Values.clickhouse.url }}
+      {{- $chHost := .Values.clickhouse.url | splitList "://" | last | splitList ":" | first }}
+      initContainers:
+        - name: init-clickhouse-db
+          image: {{ printf "%s:%s" .Values.clickhouse.initContainerImage.repository .Values.clickhouse.initContainerImage.tag }}
+          imagePullPolicy: {{ .Values.clickhouse.initContainerImage.pullPolicy }}
+          command:
+            - sh
+            - -c
+            - |
+              until curl -sS "http://${CH_HOST}:8123/" --data-binary "CREATE DATABASE IF NOT EXISTS ${CH_DB}" -G --data-urlencode "user=${CH_USER}" --data-urlencode "password=${CH_PASSWORD}"; do
+                echo "Waiting for ClickHouse..."
+                sleep 2
+              done
+              echo "ClickHouse database '${CH_DB}' ready."
+          env:
+            - name: CH_HOST
+              value: {{ $chHost | quote }}
+            - name: CH_USER
+              value: {{ .Values.clickhouse.user | quote }}
+            - name: CH_DB
+              value: {{ .Values.clickhouse.database | quote }}
+            {{- if .Values.clickhouse.password }}
+            - name: CH_PASSWORD
+              value: {{ .Values.clickhouse.password | quote }}
+            {{- else if .Values.clickhouse.existingSecret }}
+            - name: CH_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.clickhouse.existingSecret }}
+                  key: {{ default "CLICKHOUSE_PASSWORD" .Values.clickhouse.existingSecretKey }}
+            {{- end }}
+      {{- end }}
       containers:
         - name: langfuse-worker
           image: {{ include "langfuse.workerImage" . }}
