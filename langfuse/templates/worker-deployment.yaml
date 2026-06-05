@@ -32,8 +32,8 @@ spec:
       {{- $chHost := .Values.clickhouse.url | splitList "://" | last | splitList ":" | first }}
       initContainers:
         - name: init-clickhouse-db
-          image: {{ printf "%s:%s" .Values.clickhouse.initContainerImage.repository .Values.clickhouse.initContainerImage.tag }}
-          imagePullPolicy: {{ .Values.clickhouse.initContainerImage.pullPolicy }}
+          image: {{ printf "%s:%s" .Values.image.initContainer.repository .Values.image.initContainer.tag }}
+          imagePullPolicy: {{ .Values.image.initContainer.pullPolicy }}
           securityContext:
             runAsNonRoot: true
             runAsUser: 1000

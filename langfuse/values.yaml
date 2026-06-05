@@ -2,6 +2,11 @@ image:
   repository: ghcr.io/langfuse/langfuse
   tag: "3.177.1"
   pullPolicy: IfNotPresent
+  # Init container image used to create the ClickHouse database before migrations.
+  initContainer:
+    repository: curlimages/curl
+    tag: "8.17.1"
+    pullPolicy: IfNotPresent
 
 imagePullSecrets: []
 nameOverride: ""
@@ -55,11 +60,6 @@ clickhouse:
   existingSecretKey: ""
   # Disable automatic ClickHouse migrations (only one instance should run them).
   autoMigrationDisabled: false
-  # Init container image used to create the ClickHouse database before migrations.
-  initContainerImage:
-    repository: curlimages/curl
-    tag: "8.17.1"
-    pullPolicy: IfNotPresent
 
 # Redis connection. Point to an existing Redis instance.
 redis:
