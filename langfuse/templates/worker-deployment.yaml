@@ -132,6 +132,8 @@ spec:
               value: {{ .Values.clickhouse.database | quote }}
             - name: CLICKHOUSE_CLUSTER_ENABLED
               value: {{ .Values.clickhouse.clusterEnabled | quote }}
+            - name: CLICKHOUSE_CLUSTER_NAME
+              value: {{ default "default" .Values.clickhouse.clusterName | quote }}
             - name: CLICKHOUSE_MIGRATION_SSL
               value: {{ .Values.clickhouse.tlsEnabled | quote }}
             - name: LANGFUSE_AUTO_CLICKHOUSE_MIGRATION_DISABLED
