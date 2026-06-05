@@ -48,6 +48,8 @@ clickhouse:
   # password: ""  -- must be set or use clickhouse.existingSecret
   password: ""
   clusterEnabled: false
+  # Cluster name for ON CLUSTER DDL. Defaults to "default" if not set.
+  clusterName: "default"
   tlsEnabled: false
   existingSecret: ""
   existingSecretKey: ""

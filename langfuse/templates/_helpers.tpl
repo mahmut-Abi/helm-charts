@@ -126,6 +126,11 @@ Uses clickhouse.migrationUrl if set, otherwise derives from clickhouse.url.
 {{- .Values.clickhouse.migrationUrl -}}
 {{- else if .Values.clickhouse.url -}}
 {{- $host := .Values.clickhouse.url | splitList "://" | last | splitList ":" | first -}}
+{{- if .Values.clickhouse.clusterEnabled -}}
+{{- $clusterName := default "default" .Values.clickhouse.clusterName -}}
+{{- printf "clickhouse://%s:%s@%s:9000/%s?x-cluster-name=%s&x-migrations-table-engine=ReplicatedMergeTree" .Values.clickhouse.user .Values.clickhouse.password $host .Values.clickhouse.database $clusterName -}}
+{{- else -}}
 {{- printf "clickhouse://%s:%s@%s:9000/%s" .Values.clickhouse.user .Values.clickhouse.password $host .Values.clickhouse.database -}}
+{{- end -}}
 {{- end -}}
 {{- end -}}
