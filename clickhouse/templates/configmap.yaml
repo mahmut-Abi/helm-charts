@@ -30,10 +30,6 @@ data:
       <!-- Cache for index mark files -->
       <mark_cache_size>4294967296</mark_cache_size>
 
-      <!-- Enable async inserts for high-throughput ingestion -->
-      <async_insert>1</async_insert>
-      <wait_for_async_insert>0</wait_for_async_insert>
-
       <logger>
         <level>information</level>
         <console>true</console>
@@ -86,6 +82,8 @@ data:
           <max_memory_usage>32000000000</max_memory_usage>
           <use_uncompressed_cache>0</use_uncompressed_cache>
           <load_balancing>random</load_balancing>
+          <async_insert>1</async_insert>
+          <wait_for_async_insert>0</wait_for_async_insert>
         </default>
         <!-- Read-only profile for query-heavy workloads -->
         <readonly>
