@@ -54,7 +54,7 @@ data:
               <host>{{ printf "%s-%d.%s.%s.svc.%s" (include "clickhouse.fullname" $) $ordinal (include "clickhouse.headlessServiceName" $) $.Release.Namespace $.Values.cluster.clusterDomain }}</host>
               <port>{{ $.Values.service.nativePort }}</port>
               <user from_env="CLICKHOUSE_USER"/>
-<password from_env="CLICKHOUSE_PASSWORD" replace="1"/>
+              <password from_env="CLICKHOUSE_PASSWORD" replace="1"/>
             </replica>
             {{- end }}
           </shard>
