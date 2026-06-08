@@ -45,8 +45,14 @@ spec:
             - -c
             - |
               echo "Waiting for ClickHouse at ${CLICKHOUSE_HOST}:8123..."
-              until curl -sS -u "${CLICKHOUSE_USER}:${CLICKHOUSE_PASSWORD}" "http://${CLICKHOUSE_HOST}:8123/ping" > /dev/null 2>&1; do
-                echo "ClickHouse not ready, retrying in 5s..."
+              retries=0
+              until curl -sS -u "${CLICKHOUSE_USER}:${CLICKHOUSE_PASSWORD}" "http://${CLICKHOUSE_HOST}:8123/" --data-binary "SELECT 1" > /dev/null; do
+                retries=$((retries + 1))
+                if [ $retries -ge 60 ]; then
+                  echo "ERROR: ClickHouse not reachable after 5 minutes. Aborting."
+                  exit 1
+                fi
+                echo "ClickHouse not ready (attempt ${retries}/60), retrying in 5s..."
                 sleep 5
               done
               echo "ClickHouse ready. Creating database if not exists..."
