@@ -58,8 +58,11 @@ clickhouse:
   tlsEnabled: false
   existingSecret: ""
   existingSecretKey: ""
-  # Disable automatic ClickHouse migrations (only one instance should run them).
-  autoMigrationDisabled: false
+  # Disable automatic ClickHouse migrations in the web/worker pods.
+  # When true, migrations are handled ONLY by the post-install/post-upgrade Job
+  # (clickhouse-migration-job.yaml). Set to false to let the web pod also run
+  # migrations at startup (redundant but idempotent).
+  autoMigrationDisabled: true
 
 # Redis connection. Point to an existing Redis instance.
 redis:
