@@ -46,7 +46,16 @@ spec:
             - |
               echo "Waiting for ClickHouse at ${CLICKHOUSE_HOST}:8123..."
               retries=0
-              until curl -sS -u "${CLICKHOUSE_USER}:${CLICKHOUSE_PASSWORD}" "http://${CLICKHOUSE_HOST}:8123/" --data-binary "SELECT 1" > /dev/null; do
+              until node -e "
+                var h = require('http');
+                var auth = Buffer.from(process.env.CLICKHOUSE_USER + ':' + process.env.CLICKHOUSE_PASSWORD).toString('base64');
+                var req = h.get({host: process.env.CLICKHOUSE_HOST, port: 8123, path: '/?query=SELECT+1', headers: {Authorization: 'Basic ' + auth}, timeout: 5000}, function(r) {
+                  r.resume();
+                  r.on('end', function() { process.exit(0); });
+                });
+                req.on('error', function() { process.exit(1); });
+                req.on('timeout', function() { req.destroy(); process.exit(1); });
+              "; do
                 retries=$((retries + 1))
                 if [ $retries -ge 60 ]; then
                   echo "ERROR: ClickHouse not reachable after 5 minutes. Aborting."
@@ -56,7 +65,18 @@ spec:
                 sleep 5
               done
               echo "ClickHouse ready. Creating database if not exists..."
-              curl -sS -u "${CLICKHOUSE_USER}:${CLICKHOUSE_PASSWORD}" "http://${CLICKHOUSE_HOST}:8123/" --data-binary "CREATE DATABASE IF NOT EXISTS ${CLICKHOUSE_DB}"
+              node -e "
+                var h = require('http');
+                var auth = Buffer.from(process.env.CLICKHOUSE_USER + ':' + process.env.CLICKHOUSE_PASSWORD).toString('base64');
+                var body = 'CREATE DATABASE IF NOT EXISTS ' + process.env.CLICKHOUSE_DB;
+                var req = h.request({host: process.env.CLICKHOUSE_HOST, port: 8123, path: '/', method: 'POST', headers: {Authorization: 'Basic ' + auth, 'Content-Length': body.length}, timeout: 10000}, function(r) {
+                  r.resume();
+                  r.on('end', function() { process.exit(0); });
+                });
+                req.on('error', function() { process.exit(1); });
+                req.write(body);
+                req.end();
+              "
               echo ""
               echo "Running ClickHouse migrations..."
               cd /app/packages/shared && sh clickhouse/scripts/up.sh
