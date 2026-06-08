@@ -105,4 +105,15 @@ data:
           </interval>
         </default>
       </quotas>
+      <users>
+        <default>
+          <password from_env="CLICKHOUSE_PASSWORD"/>
+          <default_database>{{ .Values.auth.database }}</default_database>
+          <profile>default</profile>
+          <quota>default</quota>
+          <networks>
+            <ip>::/0</ip>
+          </networks>
+        </default>
+      </users>
     </clickhouse>
