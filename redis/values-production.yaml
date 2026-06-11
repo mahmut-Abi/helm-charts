@@ -1,0 +1,69 @@
+# High-load production example. Replace StorageClass and Secret names before use.
+serviceAccount:
+  create: true
+  automountServiceAccountToken: false
+
+auth:
+  enabled: true
+  existingSecret: redis-prod-auth
+
+cluster:
+  enabled: true
+  masters: 3
+  replicasPerMaster: 1
+  nodeTimeoutMs: 10000
+  preferredEndpointType: hostname
+
+persistence:
+  enabled: true
+  size: 200Gi
+  storageClass: premium-rwo
+  accessModes:
+    - ReadWriteOnce
+
+persistentVolumeClaimRetentionPolicy:
+  enabled: true
+  whenDeleted: Retain
+  whenScaled: Retain
+
+redis:
+  extraArgs:
+    - --appendonly
+    - "yes"
+    - --appendfsync
+    - everysec
+    - --maxmemory
+    - 12gb
+    - --maxmemory-policy
+    - allkeys-lru
+    - --tcp-keepalive
+    - "60"
+
+resources:
+  requests:
+    cpu: 2
+    memory: 8Gi
+  limits:
+    cpu: 4
+    memory: 16Gi
+
+serviceMonitor:
+  # The chart does not deploy redis_exporter; enable only after adding an exporter.
+  enabled: false
+  labels:
+    release: prometheus
+
+networkPolicy:
+  enabled: true
+  policyTypes:
+    - Ingress
+  ingress:
+    - {}
+
+topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: kubernetes.io/hostname
+    whenUnsatisfiable: ScheduleAnyway
+    labelSelector:
+      matchLabels:
+        app.kubernetes.io/name: redis

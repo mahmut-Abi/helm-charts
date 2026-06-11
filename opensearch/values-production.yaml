@@ -1,0 +1,72 @@
+# High-load production example. Replace StorageClass, Secret names, and DNs before use.
+serviceAccount:
+  create: true
+  automountServiceAccountToken: false
+
+auth:
+  existingSecret: opensearch-prod-auth
+
+cluster:
+  enabled: true
+  replicas: 5
+
+security:
+  disabled: false
+  useDemoCerts: false
+  tls:
+    existingSecret: opensearch-prod-tls
+    adminDn:
+      - CN=admin
+    nodesDn:
+      - CN=opensearch
+
+persistence:
+  enabled: true
+  storageClass: premium-rwo
+  size: 1Ti
+  accessModes:
+    - ReadWriteOnce
+
+persistentVolumeClaimRetentionPolicy:
+  enabled: true
+  whenDeleted: Retain
+  whenScaled: Retain
+
+resources:
+  requests:
+    cpu: 8
+    memory: 32Gi
+  limits:
+    cpu: 16
+    memory: 64Gi
+
+javaOpts: "-Xms30g -Xmx30g"
+
+sysctlInit:
+  enabled: true
+  maxMapCount: 262144
+
+pdb:
+  enabled: true
+  maxUnavailable: 1
+
+serviceMonitor:
+  # Enable only after installing/configuring an OpenSearch Prometheus exporter or metrics plugin.
+  enabled: false
+  labels:
+    release: prometheus
+
+networkPolicy:
+  enabled: true
+  policyTypes:
+    - Ingress
+  ingress:
+    - {}
+
+topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: kubernetes.io/hostname
+    whenUnsatisfiable: ScheduleAnyway
+    labelSelector:
+      matchLabels:
+        app.kubernetes.io/name: opensearch

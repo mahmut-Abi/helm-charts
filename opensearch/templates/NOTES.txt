@@ -16,8 +16,8 @@ Cluster mode is enabled.
 Nodes:
   {{ .Values.cluster.replicas }}
 
-Minimum master nodes:
-  {{ include "opensearch.minimumMasterNodes" . }}
+Initial cluster-manager nodes:
+{{- include "opensearch.initialClusterManagerNodes" . | nindent 2 }}
 
 Discovery hosts:
 {{- range $i, $_ := until (int (include "opensearch.replicaCount" .)) }}
@@ -35,5 +35,8 @@ Using demo TLS certificates. Not suitable for production.
 
 Verify cluster health:
 
-  curl -k -u admin:{{ .Values.auth.adminPassword }} \
-    https://{{ include "opensearch.fullname" . }}:{{ .Values.service.httpPort }}/_cluster/health?pretty
+  OPENSEARCH_PASSWORD=$(kubectl get secret {{ include "opensearch.secretName" . }} \
+    -o jsonpath='{.data.{{ .Values.auth.secretKeys.adminPassword }}}' | base64 -d)
+
+  curl -k -u {{ .Values.auth.adminUsername }}:${OPENSEARCH_PASSWORD} \
+    {{ include "opensearch.httpScheme" . }}://{{ include "opensearch.fullname" . }}:{{ .Values.service.httpPort }}/_cluster/health?pretty

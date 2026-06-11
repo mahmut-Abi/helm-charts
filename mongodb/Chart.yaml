@@ -3,4 +3,4 @@ name: mongodb
 description: A Helm chart for deploying MongoDB in standalone or replica-set mode.
 type: application
 version: 0.1.0
-appVersion: "8.0"
+appVersion: "7.0"

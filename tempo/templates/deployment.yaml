@@ -1,3 +1,4 @@
+{{- include "tempo.validateValues" . }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -23,7 +24,8 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
     spec:
-      automountServiceAccountToken: false
+      serviceAccountName: {{ include "tempo.serviceAccountName" . }}
+      automountServiceAccountToken: {{ .Values.serviceAccount.automountServiceAccountToken }}
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
@@ -39,6 +41,9 @@ spec:
             - /tempo
           args:
             - -config.file=/etc/tempo/tempo.yaml
+            {{- if and (eq .Values.storage.backend "s3") (or .Values.storage.s3.accessKey .Values.storage.s3.existingSecret) }}
+            - -config.expand-env=true
+            {{- end }}
             {{- with .Values.extraArgs }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
@@ -52,15 +57,40 @@ spec:
             - name: tempo-http
               containerPort: {{ .Values.service.tempoHttpPort }}
               protocol: TCP
-            - name: tempo-metrics
-              containerPort: {{ .Values.service.tempoMetricsPort }}
-              protocol: TCP
             - name: tempo-grpc
               containerPort: {{ .Values.tempo.grpcListenPort }}
               protocol: TCP
-          {{- with .Values.extraEnv }}
+          {{- if or .Values.extraEnv (and (eq .Values.storage.backend "s3") (or .Values.storage.s3.accessKey .Values.storage.s3.existingSecret)) }}
           env:
+            {{- if and (eq .Values.storage.backend "s3") (or .Values.storage.s3.accessKey .Values.storage.s3.existingSecret) }}
+            - name: TEMPO_S3_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "tempo.s3SecretName" . }}
+                  key: {{ .Values.storage.s3.secretKeys.accessKey }}
+            - name: TEMPO_S3_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "tempo.s3SecretName" . }}
+                  key: {{ .Values.storage.s3.secretKeys.secretKey }}
+            {{- end }}
+            {{- with .Values.extraEnv }}
             {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- end }}
+          {{- with .Values.extraEnvFrom }}
+          envFrom:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- if .Values.startupProbe.enabled }}
+          startupProbe:
+            httpGet:
+              path: /ready
+              port: tempo-http
+            initialDelaySeconds: {{ .Values.startupProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.startupProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.startupProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.startupProbe.failureThreshold }}
           {{- end }}
           {{- if .Values.livenessProbe.enabled }}
           livenessProbe:
@@ -111,6 +141,9 @@ spec:
             claimName: {{ .Values.storage.local.wal.persistence.existingClaim | default (printf "%s-wal" (include "tempo.fullname" .)) }}
         {{- end }}
         {{- end }}
+      {{- with .Values.priorityClassName }}
+      priorityClassName: {{ . | quote }}
+      {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
@@ -121,5 +154,9 @@ spec:
       {{- end }}
       {{- with .Values.affinity }}
       affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.topologySpreadConstraints }}
+      topologySpreadConstraints:
         {{- toYaml . | nindent 8 }}
       {{- end }}

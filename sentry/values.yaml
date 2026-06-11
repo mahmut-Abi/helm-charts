@@ -35,12 +35,30 @@ imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
 
+networkPolicy:
+  enabled: false
+  policyTypes:
+    - Ingress
+  ingress:
+    - {}
+  egress: []
+
+serviceAccount:
+  create: false
+  name: ""
+  annotations: {}
+  automountServiceAccountToken: false
+
 # Sentry secret key. Required. Auto-generated if not set.
 auth:
   # SENTRY_SECRET_KEY for Django. Auto-generated if not set.
   secretKey: ""
   # Set this to use a pre-created Secret instead of rendering secret.yaml.
   existingSecret: ""
+
+config:
+  # Extra Python appended to sentry.conf.py for site-specific Sentry settings.
+  extraPython: ""
 
 # Admin user configuration. Used to create the initial superuser.
 user:
@@ -71,10 +89,15 @@ kafka:
   bootstrapServers: ""
   # Auto-create Kafka topics before snuba-consumer starts.
   autoCreateTopics: true
-  # Kafka topics that snuba expects. Created by an init container when autoCreateTopics is true.
+  # Kafka topics used by relay, sentry consumers, and snuba.
   topics:
+    - ingest-events
     - events
     - group-attributes
+    - outcomes
+  topicCreation:
+    partitions: 3
+    replicationFactor: 1
 
 # ClickHouse connection for Snuba. Point to an existing ClickHouse instance.
 clickhouse:
@@ -86,8 +109,11 @@ clickhouse:
   password: ""
   existingSecret: ""
   existingSecretKey: ""
-  # Set to true when ClickHouse is a single node (no ON CLUSTER needed).
-  singleNode: false
+  # The companion ClickHouse chart defaults to standalone mode. Set false when
+  # using a replicated ClickHouse cluster.
+  singleNode: true
+  # ClickHouse cluster name used for CREATE DATABASE ... ON CLUSTER when singleNode=false.
+  clusterName: default
 
 # Filestore for uploaded files (artifacts, release files).
 filestore:
@@ -108,6 +134,8 @@ filestore:
     endpointUrl: ""
     region: us-east-1
     existingSecret: ""
+    existingSecretAccessKeyKey: ""
+    existingSecretSecretKeyKey: ""
 
 # Sentry Web (Django + React frontend).
 web:
@@ -117,6 +145,54 @@ web:
     tag: ""
   replicas: 2
   port: 9000
+  workers: 8
+  threads: 4
+  httpKeepalive: 15
+  harakiri: 25
+  maxRequests: 100000
+  maxRequestsDelta: 500
+  maxWorkerLifetime: 86400
+  bufferSize: 32768
+  limitPost: 209715200
+  reloadOnRss: 600
+  startupProbe:
+    enabled: true
+    path: /_health/
+    initialDelaySeconds: 10
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 60
+  readinessProbe:
+    enabled: true
+    path: /_health/
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 6
+  livenessProbe:
+    enabled: true
+    path: /_health/
+    initialDelaySeconds: 60
+    periodSeconds: 20
+    timeoutSeconds: 3
+    failureThreshold: 6
+  podSecurityContext:
+    fsGroup: 1000
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    seccompProfile:
+      type: RuntimeDefault
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    seccompProfile:
+      type: RuntimeDefault
   resources:
     requests:
       cpu: 500m
@@ -126,6 +202,7 @@ web:
       memory: 4Gi
   podAnnotations: {}
   podLabels: {}
+  priorityClassName: ""
   nodeSelector: {}
   tolerations: []
   affinity: {}
@@ -138,7 +215,24 @@ worker:
     repository: ""
     tag: ""
   replicas: 2
-  concurrency: 8
+  concurrency: 4
+  podSecurityContext:
+    fsGroup: 1000
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    seccompProfile:
+      type: RuntimeDefault
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    seccompProfile:
+      type: RuntimeDefault
   resources:
     requests:
       cpu: 500m
@@ -148,6 +242,7 @@ worker:
       memory: 2Gi
   podAnnotations: {}
   podLabels: {}
+  priorityClassName: ""
   nodeSelector: {}
   tolerations: []
   affinity: {}
@@ -157,6 +252,23 @@ worker:
 cron:
   enabled: true
   replicas: 1
+  podSecurityContext:
+    fsGroup: 1000
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    seccompProfile:
+      type: RuntimeDefault
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    seccompProfile:
+      type: RuntimeDefault
   resources:
     requests:
       cpu: 200m
@@ -166,6 +278,7 @@ cron:
       memory: 1Gi
   podAnnotations: {}
   podLabels: {}
+  priorityClassName: ""
   nodeSelector: {}
   tolerations: []
   affinity: {}
@@ -179,6 +292,50 @@ relay:
     tag: ""
   replicas: 2
   port: 3000
+  kafkaMessageMaxBytes: 50000000
+  waitForWeb:
+    enabled: true
+    path: /_health/
+    timeoutSeconds: 3
+    sleepSeconds: 5
+    retries: 120
+  startupProbe:
+    enabled: true
+    initialDelaySeconds: 5
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 60
+  readinessProbe:
+    enabled: true
+    path: /api/relay/healthcheck/ready/
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 6
+  livenessProbe:
+    enabled: true
+    path: /api/relay/healthcheck/live/
+    initialDelaySeconds: 60
+    periodSeconds: 20
+    timeoutSeconds: 3
+    failureThreshold: 6
+  podSecurityContext:
+    fsGroup: 1000
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    seccompProfile:
+      type: RuntimeDefault
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    seccompProfile:
+      type: RuntimeDefault
   resources:
     requests:
       cpu: 200m
@@ -188,6 +345,7 @@ relay:
       memory: 2Gi
   podAnnotations: {}
   podLabels: {}
+  priorityClassName: ""
   nodeSelector: {}
   tolerations: []
   affinity: {}
@@ -202,6 +360,41 @@ snuba:
     enabled: true
     replicas: 2
     port: 1218
+    podSecurityContext:
+      fsGroup: 1000
+      runAsNonRoot: true
+      runAsUser: 1000
+      runAsGroup: 1000
+      seccompProfile:
+        type: RuntimeDefault
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+          - ALL
+      runAsNonRoot: true
+      runAsUser: 1000
+      runAsGroup: 1000
+      seccompProfile:
+        type: RuntimeDefault
+    startupProbe:
+      enabled: true
+      initialDelaySeconds: 5
+      periodSeconds: 5
+      timeoutSeconds: 3
+      failureThreshold: 60
+    readinessProbe:
+      enabled: true
+      initialDelaySeconds: 5
+      periodSeconds: 10
+      timeoutSeconds: 3
+      failureThreshold: 6
+    livenessProbe:
+      enabled: true
+      initialDelaySeconds: 60
+      periodSeconds: 20
+      timeoutSeconds: 3
+      failureThreshold: 6
     resources:
       requests:
         cpu: 200m
@@ -211,6 +404,7 @@ snuba:
         memory: 2Gi
     podAnnotations: {}
     podLabels: {}
+    priorityClassName: ""
     nodeSelector: {}
     tolerations: []
     affinity: {}
@@ -218,6 +412,23 @@ snuba:
   consumer:
     enabled: true
     replicas: 2
+    podSecurityContext:
+      fsGroup: 1000
+      runAsNonRoot: true
+      runAsUser: 1000
+      runAsGroup: 1000
+      seccompProfile:
+        type: RuntimeDefault
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+          - ALL
+      runAsNonRoot: true
+      runAsUser: 1000
+      runAsGroup: 1000
+      seccompProfile:
+        type: RuntimeDefault
     resources:
       requests:
         cpu: 200m
@@ -227,6 +438,7 @@ snuba:
         memory: 2Gi
     podAnnotations: {}
     podLabels: {}
+    priorityClassName: ""
     nodeSelector: {}
     tolerations: []
     affinity: {}
@@ -243,6 +455,20 @@ service:
   type: ClusterIP
   port: 9000
   annotations: {}
+
+serviceMonitor:
+  enabled: false
+  labels: {}
+  annotations: {}
+  interval: 30s
+  scrapeTimeout: 10s
+  endpoints:
+    - port: http
+      path: /metrics
+
+pdb:
+  enabled: false
+  minAvailable: 1
 
 # Ingress (standard Kubernetes Ingress). Mutually exclusive with gateway.
 ingress:
@@ -278,6 +504,16 @@ gateway:
 taskbroker:
   enabled: true
   replicas: 1
+  kafkaTopic: taskworker
+  kafkaLongTopic: taskworker-long
+  kafkaDeadletterTopic: taskworker-dlq
+  persistence:
+    enabled: true
+    size: 1Gi
+    accessMode: ReadWriteOnce
+    storageClass: ""
+    existingClaim: ""
+    annotations: {}
   resources:
     requests:
       cpu: 100m
@@ -287,6 +523,39 @@ taskbroker:
       memory: 256Mi
   podAnnotations: {}
   podLabels: {}
+  podSecurityContext:
+    fsGroup: 1000
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    seccompProfile:
+      type: RuntimeDefault
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    seccompProfile:
+      type: RuntimeDefault
+  volumePermissions:
+    enabled: true
+    securityContext:
+      runAsUser: 0
+      runAsGroup: 0
+      runAsNonRoot: false
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+          - ALL
+        add:
+          - CHOWN
+          - FOWNER
+      seccompProfile:
+        type: RuntimeDefault
+  priorityClassName: ""
   nodeSelector: {}
   tolerations: []
   affinity: {}
@@ -296,6 +565,23 @@ taskbroker:
 ingestConsumer:
   enabled: true
   replicas: 1
+  podSecurityContext:
+    fsGroup: 1000
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    seccompProfile:
+      type: RuntimeDefault
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    seccompProfile:
+      type: RuntimeDefault
   resources:
     requests:
       cpu: 200m
@@ -305,7 +591,32 @@ ingestConsumer:
       memory: 768Mi
   podAnnotations: {}
   podLabels: {}
+  priorityClassName: ""
   nodeSelector: {}
   tolerations: []
   affinity: {}
   extraEnv: []
+
+# Upgrade job for migrations and DB setup.
+upgrade:
+  enabled: true
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 300
+  podSecurityContext:
+    fsGroup: 1000
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    seccompProfile:
+      type: RuntimeDefault
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    seccompProfile:
+      type: RuntimeDefault
+  priorityClassName: ""

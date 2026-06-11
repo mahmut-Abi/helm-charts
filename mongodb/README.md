@@ -2,15 +2,19 @@
 
 This chart deploys MongoDB in either standalone mode or a replica-set mode.
 
+The default image is MongoDB 7.0 because MongoDB 8.0+ currently has an upstream incompatibility with Linux 6.19+ kernels. Override `image.tag` only after confirming your node kernel and MongoDB version are compatible.
+
+## Quick Start
+
+```bash
+helm install mongodb ./mongodb
+```
+
 ## Modes
 
 ### Standalone
 
 Standalone mode is the default. It creates one StatefulSet, one client Service, one headless Service, one Secret (unless `auth.existingSecret` is set), and one PVC per pod.
-
-```bash
-helm install mongodb ./mongodb --set auth.rootPassword=my-secret-pw
-```
 
 ### Replica Set Mode
 
@@ -18,7 +22,6 @@ Replica set mode creates a single StatefulSet with `cluster.members` pods plus a
 
 ```bash
 helm install mongodb ./mongodb \
-  --set auth.rootPassword=my-secret-pw \
   --set cluster.enabled=true \
   --set cluster.members=3
 ```
@@ -50,8 +53,9 @@ The output maps each member hostname to its state (`PRIMARY`, `SECONDARY`, etc.)
 
 | Value | Description | Default |
 |---|---|---|
+| `image.tag` | MongoDB image tag | `7.0` |
 | `auth.rootUser` | MongoDB root user | `admin` |
-| `auth.rootPassword` | MongoDB root password | `""` |
+| `auth.rootPassword` | MongoDB root password; empty generates and reuses a Secret value | `""` |
 | `auth.database` | Optional initial database | `""` |
 | `auth.existingSecret` | Use an existing Secret instead of rendering one | `""` |
 | `cluster.enabled` | Enable replica set mode | `false` |
@@ -65,7 +69,7 @@ The output maps each member hostname to its state (`PRIMARY`, `SECONDARY`, etc.)
 
 ## Security Notes
 
-- Set `auth.rootPassword` explicitly or use `auth.existingSecret` to supply your own Secret.
+- Leave `auth.rootPassword` empty only if you want Helm to generate and then reuse the chart-managed Secret. For production GitOps, prefer `auth.existingSecret` or an explicit value sourced from a secret manager.
 - The main MongoDB container runs as a non-root user (UID 999, the `mongodb` user).
 - `volumePermissions` uses a short-lived root initContainer (with only `CHOWN`/`FOWNER` capabilities) to set ownership on both `/data/db` and `/data/configdb`, then the main container runs non-root.
 - Service account token automount is disabled on both the StatefulSet pods and the replica-init Job.

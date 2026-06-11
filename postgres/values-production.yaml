@@ -1,0 +1,72 @@
+# High-load production example. Replace StorageClass and Secret names before use.
+serviceAccount:
+  create: true
+  automountServiceAccountToken: false
+
+auth:
+  existingSecret: postgres-prod-auth
+
+cluster:
+  enabled: true
+  replicas: 3
+  replicaBootstrapCheckIntervalSeconds: 3
+
+postgresql:
+  parameters:
+    password_encryption: scram-sha-256
+    max_connections: 500
+    shared_buffers: 8GB
+    effective_cache_size: 24GB
+    maintenance_work_mem: 2GB
+    work_mem: 32MB
+    wal_compression: "on"
+    max_wal_size: 16GB
+    min_wal_size: 4GB
+    checkpoint_timeout: 15min
+    checkpoint_completion_target: 0.9
+    random_page_cost: 1.1
+
+persistence:
+  enabled: true
+  size: 500Gi
+  storageClass: premium-rwo
+  accessModes:
+    - ReadWriteOnce
+
+persistentVolumeClaimRetentionPolicy:
+  enabled: true
+  whenDeleted: Retain
+  whenScaled: Retain
+
+resources:
+  requests:
+    cpu: 4
+    memory: 16Gi
+  limits:
+    cpu: 8
+    memory: 32Gi
+
+pdb:
+  enabled: true
+  maxUnavailable: 1
+
+serviceMonitor:
+  # The chart does not deploy postgres_exporter; enable only after adding an exporter.
+  enabled: false
+  labels:
+    release: prometheus
+
+networkPolicy:
+  enabled: true
+  policyTypes:
+    - Ingress
+  ingress:
+    - {}
+
+topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: kubernetes.io/hostname
+    whenUnsatisfiable: ScheduleAnyway
+    labelSelector:
+      matchLabels:
+        app.kubernetes.io/name: postgres

@@ -16,7 +16,8 @@ Check collector health:
   kubectl port-forward -n {{ .Release.Namespace }} svc/{{ include "otel.fullname" . }} {{ .Values.service.healthCheckPort }}:{{ .Values.service.healthCheckPort }}
   curl http://localhost:{{ .Values.service.healthCheckPort }}
 
-{{- if not .Values.config.exporters.otlp.endpoint }}
-WARNING: config.exporters.otlp.endpoint is empty. Set it to your backend endpoint
-(e.g., jaeger, tempo, or another collector) to export telemetry data.
+{{- $otlpExporter := get .Values.config.exporters "otlp" | default dict }}
+{{- if not (get $otlpExporter "endpoint") }}
+External OTLP export is not configured. Add config.exporters.otlp and include
+otlp in the pipelines when you want to forward telemetry to another backend.
 {{- end }}

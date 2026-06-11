@@ -1,4 +1,6 @@
 {{- include "clickhouse.validateValues" . }}
+{{- $metrics := default dict (get .Values "metrics") -}}
+{{- $metricsEnabled := get $metrics "enabled" | default false -}}
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
@@ -9,6 +11,11 @@ spec:
   replicas: {{ include "clickhouse.replicaCount" . }}
   podManagementPolicy: {{ include "clickhouse.podManagementPolicy" . }}
   serviceName: {{ include "clickhouse.headlessServiceName" . }}
+  {{- if and .Values.persistence.enabled .Values.persistentVolumeClaimRetentionPolicy.enabled }}
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: {{ .Values.persistentVolumeClaimRetentionPolicy.whenDeleted }}
+    whenScaled: {{ .Values.persistentVolumeClaimRetentionPolicy.whenScaled }}
+  {{- end }}
   selector:
     matchLabels:
       {{- include "clickhouse.selectorLabels" . | nindent 6 }}
@@ -24,13 +31,17 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
     spec:
-      automountServiceAccountToken: false
+      serviceAccountName: {{ include "clickhouse.serviceAccountName" . }}
+      automountServiceAccountToken: {{ .Values.serviceAccount.automountServiceAccountToken }}
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- with .Values.priorityClassName }}
+      priorityClassName: {{ . | quote }}
+      {{- end }}
       terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
       initContainers:
         - name: copy-users-config
@@ -152,6 +163,11 @@ spec:
             - name: native
               containerPort: {{ .Values.service.nativePort }}
               protocol: TCP
+            {{- if $metricsEnabled }}
+            - name: metrics
+              containerPort: {{ get $metrics "port" | default 9363 }}
+              protocol: TCP
+            {{- end }}
             {{- if .Values.cluster.enabled }}
             - name: interserver
               containerPort: {{ .Values.service.interserverHttpPort }}
@@ -169,6 +185,20 @@ spec:
               port: http
             initialDelaySeconds: 10
             periodSeconds: 10
+          {{- if .Values.startupProbe.enabled }}
+          startupProbe:
+            exec:
+              command:
+                - clickhouse-client
+                - --database
+                - default
+                - --query
+                - SELECT 1
+            initialDelaySeconds: {{ .Values.startupProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.startupProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.startupProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.startupProbe.failureThreshold }}
+          {{- end }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
@@ -226,6 +256,10 @@ spec:
         {{- with .Values.affinity }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
+      {{- with .Values.topologySpreadConstraints }}
+      topologySpreadConstraints:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       {{- with .Values.tolerations }}
       tolerations:
         {{- toYaml . | nindent 8 }}

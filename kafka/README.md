@@ -29,22 +29,24 @@ Enable SASL/PLAIN authentication for client and inter-broker communication:
 ```bash
 helm install kafka ./kafka \
   --set auth.enabled=true \
-  --set auth.interBrokerUser=kafka \
-  --set auth.interBrokerPassword=secret123 \
   --set 'auth.clientUsers[0].user=admin' \
-  --set 'auth.clientUsers[0].password=admin-secret'
+  --set 'auth.clientUsers[0].password=<strong-random-password>'
 ```
 
-## Configuration
+If `auth.interBrokerPassword` is omitted, the chart generates it on first install and reuses the Secret value on upgrade.
+
+## Important Values
 
 | Parameter | Description | Default |
 |-----------|-------------|---------|
 | `replicas` | Number of broker replicas | `3` |
 | `image.repository` | Kafka image repository | `apache/kafka` |
-| `image.tag` | Kafka image tag | `3.9.0` |
+| `image.tag` | Kafka image tag | `4.3.0` |
 | `persistence.enabled` | Enable persistent storage | `true` |
 | `persistence.size` | Storage size per broker | `50Gi` |
 | `auth.enabled` | Enable SASL authentication | `false` |
+| `auth.interBrokerPassword` | Inter-broker SASL password; empty generates and reuses a Secret value | `""` |
+| `auth.existingSecret` | Use pre-created SASL Secret | `""` |
 | `service.nodePort` | NodePort for external access (0 = disabled) | `0` |
 | `heapOpts` | JVM heap options | `-Xmx2G -Xms1G` |
 | `extraServerProperties` | Additional server.properties entries | `{}` |
@@ -64,3 +66,11 @@ Individual broker endpoints:
 <release>-kafka-1.<release>-kafka-headless.<namespace>.svc.cluster.local:9092
 ...
 ```
+
+## Cleanup
+
+```bash
+helm uninstall kafka -n <namespace>
+```
+
+PVCs created by StatefulSets may remain after uninstall depending on the cluster and Kubernetes version.

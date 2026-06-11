@@ -45,3 +45,14 @@ Selector labels.
 app.kubernetes.io/name: {{ include "otel.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end -}}
+
+{{/*
+Service account name.
+*/}}
+{{- define "otel.serviceAccountName" -}}
+{{- if .Values.serviceAccount.create -}}
+{{- default (include "otel.fullname" .) .Values.serviceAccount.name -}}
+{{- else -}}
+{{- default "default" .Values.serviceAccount.name -}}
+{{- end -}}
+{{- end -}}

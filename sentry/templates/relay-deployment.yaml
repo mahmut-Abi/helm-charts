@@ -23,20 +23,41 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
     spec:
-      automountServiceAccountToken: false
+      serviceAccountName: {{ include "sentry.serviceAccountName" . }}
+      automountServiceAccountToken: {{ .Values.serviceAccount.automountServiceAccountToken }}
+      {{- with .Values.relay.podSecurityContext }}
       securityContext:
-        runAsNonRoot: false
-        runAsUser: 0
-        runAsGroup: 0
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.relay.priorityClassName }}
+      priorityClassName: {{ . | quote }}
       {{- end }}
       initContainers:
         - name: copy-config
           image: "{{ .Values.image.busybox.repository }}:{{ .Values.image.busybox.tag }}"
           imagePullPolicy: {{ .Values.image.busybox.pullPolicy }}
-          command: ["cp", "/relay-config/config.yml", "/etc/relay/config.yml"]
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              cp /relay-config/config.yml /etc/relay/config.yml
+              if [ -n "${SENTRY_REDIS_PASSWORD:-}" ]; then
+                redis_url="redis://:${SENTRY_REDIS_PASSWORD}@${SENTRY_REDIS_HOST}:${SENTRY_REDIS_PORT}/1"
+              else
+                redis_url="redis://${SENTRY_REDIS_HOST}:${SENTRY_REDIS_PORT}/1"
+              fi
+              printf '  redis: "%s"\n' "$redis_url" >> /etc/relay/config.yml
+          env:
+            - name: SENTRY_REDIS_HOST
+              value: {{ .Values.redis.host | quote }}
+            - name: SENTRY_REDIS_PORT
+              value: {{ .Values.redis.port | quote }}
+            - name: SENTRY_REDIS_PASSWORD
+              {{- include "sentry.redisPasswordEnvValue" . | nindent 14 }}
           volumeMounts:
             - name: relay-config-source
               mountPath: /relay-config
@@ -51,19 +72,42 @@ spec:
           volumeMounts:
             - name: relay-conf
               mountPath: /etc/relay
+        {{- if .Values.relay.waitForWeb.enabled }}
+        - name: wait-for-web
+          image: "{{ .Values.image.busybox.repository }}:{{ .Values.image.busybox.tag }}"
+          imagePullPolicy: {{ .Values.image.busybox.pullPolicy }}
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              url="http://{{ include "sentry.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.service.port }}{{ .Values.relay.waitForWeb.path }}"
+              i=0
+              until wget -q -T {{ .Values.relay.waitForWeb.timeoutSeconds }} -O /dev/null "$url"; do
+                i=$((i + 1))
+                if [ "$i" -ge {{ .Values.relay.waitForWeb.retries }} ]; then
+                  echo "Timed out waiting for Sentry web at $url"
+                  exit 1
+                fi
+                sleep {{ .Values.relay.waitForWeb.sleepSeconds }}
+              done
+        {{- end }}
       containers:
         - name: relay
           image: {{ include "sentry.relayImage" . }}
           imagePullPolicy: {{ .Values.image.relay.pullPolicy }}
+          {{- with .Values.relay.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           command: ["relay", "run", "--config", "/etc/relay"]
           ports:
             - name: relay
               containerPort: {{ .Values.relay.port }}
               protocol: TCP
+          {{- with .Values.relay.extraEnv }}
           env:
-            {{- with .Values.relay.extraEnv }}
             {{- toYaml . | nindent 12 }}
-            {{- end }}
+          {{- end }}
           volumeMounts:
             - name: relay-conf
               mountPath: /etc/relay
@@ -71,13 +115,35 @@ spec:
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-          securityContext:
-            allowPrivilegeEscalation: false
-            capabilities:
-              drop:
-                - ALL
-            seccompProfile:
-              type: RuntimeDefault
+          {{- if .Values.relay.startupProbe.enabled }}
+          startupProbe:
+            tcpSocket:
+              port: relay
+            initialDelaySeconds: {{ .Values.relay.startupProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.relay.startupProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.relay.startupProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.relay.startupProbe.failureThreshold }}
+          {{- end }}
+          {{- if .Values.relay.readinessProbe.enabled }}
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.relay.readinessProbe.path | quote }}
+              port: relay
+            initialDelaySeconds: {{ .Values.relay.readinessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.relay.readinessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.relay.readinessProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.relay.readinessProbe.failureThreshold }}
+          {{- end }}
+          {{- if .Values.relay.livenessProbe.enabled }}
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.relay.livenessProbe.path | quote }}
+              port: relay
+            initialDelaySeconds: {{ .Values.relay.livenessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.relay.livenessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.relay.livenessProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.relay.livenessProbe.failureThreshold }}
+          {{- end }}
       volumes:
         - name: relay-config-source
           configMap:

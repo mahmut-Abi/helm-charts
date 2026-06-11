@@ -1,4 +1,5 @@
 {{- if .Values.cluster.enabled }}
+{{- $mysqlConfig := default dict (get .Values "mysql") -}}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -17,6 +18,12 @@ data:
     sync_binlog = 1
     relay-log = relay-bin
     skip-replica-start = 0
+    {{- with (get $mysqlConfig "extraConfiguration") }}
+    {{- . | nindent 4 }}
+    {{- end }}
+    {{- with (get $mysqlConfig "primaryExtraConfiguration") }}
+    {{- . | nindent 4 }}
+    {{- end }}
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -28,21 +35,28 @@ metadata:
 data:
   replica.cnf: |
     [mysqld]
-    server-id = 100
     gtid_mode = ON
     enforce-gtid-consistency = ON
     relay-log = relay-bin
     skip-replica-start = 1
     read_only = ON
+    {{- with (get $mysqlConfig "extraConfiguration") }}
+    {{- . | nindent 4 }}
+    {{- end }}
+    {{- with (get $mysqlConfig "replicaExtraConfiguration") }}
+    {{- . | nindent 4 }}
+    {{- end }}
   configure-replica-entrypoint.sh: |
     #!/bin/bash
     set -e
 
     PRIMARY="{{ include "mysql.primaryFullname" . }}-0.{{ include "mysql.headlessServiceName" . }}.{{ .Release.Namespace }}.svc.cluster.local"
+    ORDINAL="${HOSTNAME##*-}"
+    SERVER_ID=$((100 + ORDINAL + 1))
 
     # If MySQL was already initialized, just start normally.
     if [ -f /var/lib/mysql/initialized ]; then
-      exec /docker-entrypoint.sh mysqld --skip-replica-start=0
+      exec /docker-entrypoint.sh mysqld --server-id="${SERVER_ID}" --skip-replica-start=0
     fi
 
     echo "Waiting for primary ${PRIMARY} to be ready."
@@ -51,7 +65,7 @@ data:
     done
 
     echo "Starting MySQL in background for replication setup."
-    /docker-entrypoint.sh mysqld --skip-replica-start &
+    /docker-entrypoint.sh mysqld --server-id="${SERVER_ID}" --skip-replica-start &
     MYSQL_PID=$!
 
     until mysqladmin ping -h localhost -u root -p"${MYSQL_ROOT_PASSWORD}" --silent 2>/dev/null; do
@@ -78,5 +92,5 @@ data:
     wait ${MYSQL_PID}
 
     echo "Starting MySQL with replication."
-    exec /docker-entrypoint.sh mysqld --skip-replica-start=0
+    exec /docker-entrypoint.sh mysqld --server-id="${SERVER_ID}" --skip-replica-start=0
 {{- end }}

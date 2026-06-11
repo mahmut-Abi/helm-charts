@@ -1,0 +1,74 @@
+# High-load production example. Replace StorageClass and Secret names before use.
+serviceAccount:
+  create: true
+  automountServiceAccountToken: false
+
+replicas: 5
+
+auth:
+  enabled: true
+  existingSecret: kafka-prod-auth
+  interBrokerUser: kafka
+
+persistence:
+  enabled: true
+  size: 1Ti
+  storageClass: premium-rwo
+  accessModes:
+    - ReadWriteOnce
+  kraftDedicated: true
+  kraftSize: 100Gi
+
+persistentVolumeClaimRetentionPolicy:
+  enabled: true
+  whenDeleted: Retain
+  whenScaled: Retain
+
+resources:
+  requests:
+    cpu: 4
+    memory: 16Gi
+  limits:
+    cpu: 8
+    memory: 32Gi
+
+heapOpts: "-Xms8G -Xmx8G"
+maxMessageBytes: "52428800"
+
+extraServerProperties:
+  auto.create.topics.enable: "false"
+  num.partitions: "24"
+  default.replication.factor: "3"
+  min.insync.replicas: "2"
+  offsets.topic.replication.factor: "3"
+  transaction.state.log.replication.factor: "3"
+  transaction.state.log.min.isr: "2"
+  log.retention.hours: "168"
+  log.segment.bytes: "1073741824"
+  log.cleaner.enable: "true"
+  num.network.threads: "8"
+  num.io.threads: "16"
+  socket.send.buffer.bytes: "1048576"
+  socket.receive.buffer.bytes: "1048576"
+  queued.max.requests: "1000"
+
+serviceMonitor:
+  # The chart does not deploy a JMX exporter; enable only after adding one.
+  enabled: false
+  labels:
+    release: prometheus
+
+networkPolicy:
+  enabled: true
+  policyTypes:
+    - Ingress
+  ingress:
+    - {}
+
+topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: kubernetes.io/hostname
+    whenUnsatisfiable: ScheduleAnyway
+    labelSelector:
+      matchLabels:
+        app.kubernetes.io/name: kafka

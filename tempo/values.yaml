@@ -7,6 +7,12 @@ imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
 
+serviceAccount:
+  create: false
+  name: ""
+  annotations: {}
+  automountServiceAccountToken: false
+
 # Number of replicas. For monolithic mode, keep at 1.
 replicaCount: 1
 
@@ -104,6 +110,18 @@ storage:
     region: us-east-1
     insecure: false
     existingSecret: ""
+    secretKeys:
+      accessKey: TEMPO_S3_ACCESS_KEY
+      secretKey: TEMPO_S3_SECRET_KEY
+
+
+networkPolicy:
+  enabled: false
+  policyTypes:
+    - Ingress
+  ingress:
+    - {}
+  egress: []
 
 # Service configuration.
 service:
@@ -114,9 +132,19 @@ service:
   otlpHttpPort: 4318
   # Tempo HTTP API port for querying traces.
   tempoHttpPort: 3200
-  # Tempo metrics port.
-  tempoMetricsPort: 3100
   annotations: {}
+
+serviceMonitor:
+  enabled: false
+  labels: {}
+  endpoints:
+    - port: tempo-http
+      interval: 30s
+      path: /metrics
+
+podDisruptionBudget:
+  enabled: true
+  maxUnavailable: 1
 
 # Resource configuration.
 resources:
@@ -138,6 +166,13 @@ livenessProbe:
   initialDelaySeconds: 30
   periodSeconds: 20
 
+startupProbe:
+  enabled: true
+  initialDelaySeconds: 10
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 30
+
 podAnnotations: {}
 podLabels: {}
 
@@ -156,6 +191,8 @@ securityContext:
   seccompProfile:
     type: RuntimeDefault
 
+priorityClassName: ""
+
 nodeSelector: {}
 tolerations: []
 affinity: {}
@@ -172,3 +209,8 @@ extraArgs: []
 
 # Additional environment variables.
 extraEnv: []
+
+# Additional environment variable sources, typically Secrets with object-store credentials.
+extraEnvFrom: []
+
+topologySpreadConstraints: []

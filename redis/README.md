@@ -2,15 +2,17 @@
 
 This chart deploys Redis in standalone mode or Redis Cluster mode.
 
+## Quick Start
+
+```bash
+helm install redis ./redis
+```
+
 ## Modes
 
 ### Standalone
 
 Standalone mode is the default. It creates one StatefulSet, one client Service, one headless Service, one Secret when auth is enabled and `auth.existingSecret` is not set, and one PVC per pod.
-
-```bash
-helm install redis ./redis
-```
 
 If `cluster.enabled=false`, increasing `replicaCount` creates multiple independent Redis pods. It does not configure Redis replication or Sentinel.
 
@@ -74,7 +76,7 @@ Cluster mode also exposes the cluster bus port, default `16379`, on both the nor
 | Value | Description | Default |
 |---|---|---|
 | `auth.enabled` | Enable password authentication | `true` |
-| `auth.password` | Redis password | `change-me` |
+| `auth.password` | Redis password; empty generates and reuses a Secret value | `""` |
 | `auth.existingSecret` | Use an existing Secret instead of rendering one | `""` |
 | `cluster.enabled` | Enable Redis Cluster mode | `false` |
 | `cluster.masters` | Number of Redis Cluster masters | `3` |
@@ -85,7 +87,7 @@ Cluster mode also exposes the cluster bus port, default `16379`, on both the nor
 
 ## Security Notes
 
-- Change `auth.password` before production use, or use `auth.existingSecret` to supply your own Secret.
+- Leave `auth.password` empty only if you want Helm to generate and then reuse the chart-managed Secret. For production GitOps, prefer `auth.existingSecret` or an explicit value sourced from a secret manager.
 - The Redis container runs as a non-root user by default.
 - The chart drops Linux capabilities and uses `RuntimeDefault` seccomp by default.
 - Service account token automount is disabled on all StatefulSet pods.

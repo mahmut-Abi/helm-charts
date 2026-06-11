@@ -1,0 +1,114 @@
+# High-load production example. Replace hosts, Secret names, and URLs before use.
+serviceAccount:
+  create: true
+  automountServiceAccountToken: false
+
+auth:
+  nextauthUrl: https://langfuse.example.com
+  existingSecret: langfuse-prod-auth
+
+postgres:
+  existingSecret: langfuse-postgres-auth
+  existingSecretKey: DATABASE_URL
+
+clickhouse:
+  url: https://langfuse-clickhouse.example.com:8443
+  migrationUrl: https://langfuse-clickhouse.example.com:8443
+  httpPort: 8443
+  database: langfuse
+  user: langfuse
+  clusterEnabled: true
+  clusterName: default
+  tlsEnabled: true
+  existingSecret: langfuse-clickhouse-auth
+  existingSecretKey: CLICKHOUSE_PASSWORD
+  migrationUrlExistingSecretKey: CLICKHOUSE_MIGRATION_URL
+  autoMigrationDisabled: true
+
+redis:
+  tlsEnabled: true
+  existingSecret: langfuse-redis-auth
+  existingSecretKey: REDIS_CONNECTION_STRING
+
+s3:
+  enabled: true
+  endpoint: https://s3.example.com
+  region: us-east-1
+  bucket: langfuse-events
+  forcePathStyle: false
+  existingSecret: langfuse-s3
+  existingSecretAccessKeyIdKey: LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID
+  existingSecretSecretAccessKeyKey: LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY
+
+web:
+  replicas: 4
+  nodeOptions: "--max-old-space-size=4096"
+  resources:
+    requests:
+      cpu: 2
+      memory: 4Gi
+    limits:
+      cpu: 4
+      memory: 8Gi
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: kubernetes.io/hostname
+      whenUnsatisfiable: ScheduleAnyway
+      labelSelector:
+        matchLabels:
+          app.kubernetes.io/name: langfuse
+          app.kubernetes.io/component: web
+
+worker:
+  replicas: 4
+  nodeOptions: "--max-old-space-size=4096"
+  resources:
+    requests:
+      cpu: 2
+      memory: 4Gi
+    limits:
+      cpu: 4
+      memory: 8Gi
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: kubernetes.io/hostname
+      whenUnsatisfiable: ScheduleAnyway
+      labelSelector:
+        matchLabels:
+          app.kubernetes.io/name: langfuse
+          app.kubernetes.io/component: worker
+
+podDisruptionBudget:
+  web:
+    enabled: true
+    minAvailable: 2
+  worker:
+    enabled: true
+    minAvailable: 2
+
+clickhouseMigrationJob:
+  activeDeadlineSeconds: 3600
+  resources:
+    requests:
+      cpu: 1
+      memory: 1Gi
+    limits:
+      cpu: 2
+      memory: 2Gi
+
+serviceMonitor:
+  # Enable only after confirming the Langfuse image exposes the configured metrics endpoint.
+  enabled: false
+  labels:
+    release: prometheus
+
+networkPolicy:
+  enabled: true
+  policyTypes:
+    - Ingress
+    - Egress
+  # Replace allow-all with precise application/dependency selectors in production.
+  ingress:
+    - {}
+  egress:
+    - {}

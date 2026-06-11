@@ -44,14 +44,6 @@ spec:
                 name: {{ include "sentry.fullname" $ }}-relay
                 port:
                   number: {{ $.Values.relay.port }}
-          # Relay-to-relay communication → relay
-          - path: /api/0/relays/(.*)
-            pathType: ImplementationSpecific
-            backend:
-              service:
-                name: {{ include "sentry.fullname" $ }}-relay
-                port:
-                  number: {{ $.Values.relay.port }}
           # Everything else → web
           - path: /
             pathType: ImplementationSpecific

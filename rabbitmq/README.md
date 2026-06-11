@@ -2,15 +2,17 @@
 
 This chart deploys RabbitMQ in either standalone mode or a clustered mode using the Erlang distribution mechanism.
 
+## Quick Start
+
+```bash
+helm install rabbitmq ./rabbitmq
+```
+
 ## Modes
 
 ### Standalone
 
 Standalone mode is the default. It creates one StatefulSet, one client Service, one headless Service, one Secret (unless `auth.existingSecret` is set), and one PVC per pod.
-
-```bash
-helm install rabbitmq ./rabbitmq --set auth.defaultPass=my-secret-pw
-```
 
 ### Cluster Mode
 
@@ -18,13 +20,11 @@ Cluster mode creates a single StatefulSet with `cluster.replicas` pods. Nodes fo
 
 ```bash
 helm install rabbitmq ./rabbitmq \
-  --set auth.defaultPass=my-secret-pw \
-  --set auth.erlangCookie=shared-secret-cookie \
   --set cluster.enabled=true \
   --set cluster.replicas=3
 ```
 
-The Erlang cookie must be identical across all nodes. Set `auth.erlangCookie` to a fixed value for cluster mode; for standalone mode the chart auto-generates one.
+The Erlang cookie must be identical across all nodes. Leave `auth.erlangCookie` empty to let the chart generate and then reuse one, or supply a fixed value/existing Secret from your secret manager.
 
 #### Cluster Formation
 
@@ -62,8 +62,8 @@ Output includes a list of running nodes (`running_nodes`) and disc nodes. Each r
 | Value | Description | Default |
 |---|---|---|
 | `auth.defaultUser` | RabbitMQ admin user | `admin` |
-| `auth.defaultPass` | RabbitMQ admin password | `""` |
-| `auth.erlangCookie` | Erlang cookie for cluster auth | auto-generated |
+| `auth.defaultPass` | RabbitMQ admin password; empty generates and reuses a Secret value | `""` |
+| `auth.erlangCookie` | Erlang cookie for cluster auth; empty generates and reuses a Secret value | `""` |
 | `auth.existingSecret` | Use an existing Secret instead of rendering one | `""` |
 | `cluster.enabled` | Enable cluster mode | `false` |
 | `cluster.replicas` | Number of cluster nodes | `3` |
@@ -78,7 +78,7 @@ Output includes a list of running nodes (`running_nodes`) and disc nodes. Each r
 
 ## Security Notes
 
-- Set `auth.defaultPass` explicitly or use `auth.existingSecret` to supply your own Secret.
+- Leave password/cookie values empty only if you want Helm to generate and then reuse the chart-managed Secret. For production GitOps, prefer `auth.existingSecret` or explicit values sourced from a secret manager.
 - The main RabbitMQ container runs as a non-root user (UID 999, the `rabbitmq` user).
 - `volumePermissions` uses a short-lived root initContainer (with only `CHOWN`/`FOWNER` capabilities) to set ownership on `/var/lib/rabbitmq`, then the main container runs non-root.
 - Service account token automount is disabled on all StatefulSet pods.

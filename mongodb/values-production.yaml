@@ -1,0 +1,53 @@
+# High-load production example. Replace StorageClass and Secret names before use.
+serviceAccount:
+  create: true
+  automountServiceAccountToken: false
+
+auth:
+  existingSecret: mongodb-prod-auth
+
+cluster:
+  enabled: true
+  members: 3
+  replicaSetName: rs0
+
+persistence:
+  enabled: true
+  size: 500Gi
+  storageClass: premium-rwo
+  accessModes:
+    - ReadWriteOnce
+
+persistentVolumeClaimRetentionPolicy:
+  enabled: true
+  whenDeleted: Retain
+  whenScaled: Retain
+
+resources:
+  requests:
+    cpu: 4
+    memory: 16Gi
+  limits:
+    cpu: 8
+    memory: 32Gi
+
+serviceMonitor:
+  # The chart does not deploy mongodb_exporter; enable only after adding an exporter.
+  enabled: false
+  labels:
+    release: prometheus
+
+networkPolicy:
+  enabled: true
+  policyTypes:
+    - Ingress
+  ingress:
+    - {}
+
+topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: kubernetes.io/hostname
+    whenUnsatisfiable: ScheduleAnyway
+    labelSelector:
+      matchLabels:
+        app.kubernetes.io/name: mongodb

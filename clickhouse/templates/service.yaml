@@ -1,3 +1,5 @@
+{{- $metrics := default dict (get .Values "metrics") -}}
+{{- $metricsEnabled := get $metrics "enabled" | default false -}}
 apiVersion: v1
 kind: Service
 metadata:
@@ -19,6 +21,12 @@ spec:
       port: {{ .Values.service.nativePort }}
       targetPort: native
       protocol: TCP
+    {{- if $metricsEnabled }}
+    - name: metrics
+      port: {{ get $metrics "port" | default 9363 }}
+      targetPort: metrics
+      protocol: TCP
+    {{- end }}
   selector:
     {{- include "clickhouse.selectorLabels" . | nindent 4 }}
 ---
@@ -44,6 +52,12 @@ spec:
       port: {{ .Values.service.nativePort }}
       targetPort: native
       protocol: TCP
+    {{- if $metricsEnabled }}
+    - name: metrics
+      port: {{ get $metrics "port" | default 9363 }}
+      targetPort: metrics
+      protocol: TCP
+    {{- end }}
     {{- if .Values.cluster.enabled }}
     - name: interserver
       port: {{ .Values.service.interserverHttpPort }}

@@ -1,3 +1,4 @@
+{{- include "sentry.validateValues" . }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -9,11 +10,13 @@ data:
     import os
     import os.path
 
+    from sentry.conf.server import *  # noqa: F401,F403
+
     # Use dummy secrets for non-install commands (key generation, createsuperuser)
     if any(c in os.environ.get("SENTRY_RUN_EXECUTABLE", "") for c in ("key", "createsuperuser")):
-        SENTRY_OPTIONS = {"system.secret-key": "dummy"}
+        SENTRY_OPTIONS["system.secret-key"] = "dummy"
     else:
-        SENTRY_OPTIONS = {"system.secret-key": os.environ.get("SENTRY_SECRET_KEY", "")}
+        SENTRY_OPTIONS["system.secret-key"] = os.environ.get("SENTRY_SECRET_KEY", "")
 
     DATABASES = {
         "default": {
@@ -37,7 +40,7 @@ data:
     CELERY_ALWAYS_EAGER = False
     BROKER_URL = f"redis://{_redis_auth}{_redis_host}:{_redis_port}/0"
 
-    # Redis clusters and rate limiter
+    # Redis clusters, buffer, quotas, and rate limiter
     SENTRY_OPTIONS["redis.clusters"] = {
         "default": {
             "hosts": {
@@ -49,6 +52,8 @@ data:
             }
         }
     }
+    SENTRY_BUFFER = "sentry.buffer.redis.RedisBuffer"
+    SENTRY_QUOTAS = "sentry.quotas.redis.RedisQuota"
 
     # Cache backend
     CACHES = {
@@ -92,6 +97,8 @@ data:
             "bootstrap.servers": os.environ.get("KAFKA_BOOTSTRAP_SERVERS", "kafka:9092"),
         }
     }
+    SENTRY_EVENTSTREAM = "sentry.eventstream.kafka.KafkaEventStream"
+    SENTRY_EVENTSTREAM_OPTIONS = {"producer_configuration": KAFKA_CLUSTERS["default"]}
 
     # Snuba
     SENTRY_SNUBA = os.environ.get("SNUBA_HOST", "http://snuba:1218")
@@ -114,6 +121,14 @@ data:
         "http": "{}:{}".format(SENTRY_WEB_HOST, SENTRY_WEB_PORT),
         "workers": int(os.environ.get("SENTRY_WEB_WORKERS", "3")),
         "threads": int(os.environ.get("SENTRY_WEB_THREADS", "4")),
+        "http-keepalive": int(os.environ.get("SENTRY_WEB_HTTP_KEEPALIVE", "15")),
+        "harakiri": int(os.environ.get("SENTRY_WEB_HARAKIRI", "25")),
+        "max-requests": int(os.environ.get("SENTRY_WEB_MAX_REQUESTS", "100000")),
+        "max-requests-delta": int(os.environ.get("SENTRY_WEB_MAX_REQUESTS_DELTA", "500")),
+        "max-worker-lifetime": int(os.environ.get("SENTRY_WEB_MAX_WORKER_LIFETIME", "86400")),
+        "buffer-size": int(os.environ.get("SENTRY_WEB_BUFFER_SIZE", "32768")),
+        "limit-post": int(os.environ.get("SENTRY_WEB_LIMIT_POST", "209715200")),
+        "reload-on-rss": int(os.environ.get("SENTRY_WEB_RELOAD_ON_RSS", "600")),
     }
 
     SENTRY_FEATURES = {
@@ -125,3 +140,7 @@ data:
         "organizations:starfish-view": True,
     }
     SENTRY_SELF_HOSTED = True
+    {{- with .Values.config.extraPython }}
+
+    {{ . | nindent 4 }}
+    {{- end }}

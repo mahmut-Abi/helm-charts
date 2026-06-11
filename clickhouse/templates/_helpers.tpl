@@ -22,6 +22,17 @@ Create a default fully qualified app name.
 {{- end -}}
 
 {{/*
+Service account name.
+*/}}
+{{- define "clickhouse.serviceAccountName" -}}
+{{- if .Values.serviceAccount.create -}}
+{{- default (include "clickhouse.fullname" .) .Values.serviceAccount.name -}}
+{{- else -}}
+{{- default "default" .Values.serviceAccount.name -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
 Create chart name and version as used by the chart label.
 */}}
 {{- define "clickhouse.chart" -}}
@@ -94,6 +105,11 @@ Validate cluster-related values.
 {{- if and .Values.keeper.enabled (lt $keeperReplicas 1) -}}
 {{- fail "keeper.replicas must be at least 1 when keeper.enabled is true" -}}
 {{- end -}}
+{{- end -}}
+{{- $metrics := default dict (get .Values "metrics") -}}
+{{- $metricsEnabled := get $metrics "enabled" | default false -}}
+{{- if and .Values.serviceMonitor.enabled (not $metricsEnabled) -}}
+{{- fail "serviceMonitor.enabled requires metrics.enabled=true so the Service exposes a real metrics port" -}}
 {{- end -}}
 {{- end -}}
 

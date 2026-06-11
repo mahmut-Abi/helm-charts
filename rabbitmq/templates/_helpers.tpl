@@ -94,3 +94,14 @@ Parallel
 OrderedReady
 {{- end -}}
 {{- end -}}
+
+{{/*
+ServiceAccount name.
+*/}}
+{{- define "rabbitmq.serviceAccountName" -}}
+{{- if .Values.serviceAccount.create -}}
+{{- default (include "rabbitmq.fullname" .) .Values.serviceAccount.name -}}
+{{- else -}}
+{{- default "default" .Values.serviceAccount.name -}}
+{{- end -}}
+{{- end -}}

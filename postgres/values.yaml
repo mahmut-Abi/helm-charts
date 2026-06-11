@@ -11,23 +11,39 @@ imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
 
+serviceAccount:
+  # Create a dedicated ServiceAccount. When false the cluster default is used.
+  create: false
+  # Name overrides the generated ServiceAccount name. Only applies when create is true.
+  name: ""
+  annotations: {}
+  automountServiceAccountToken: false
+
 auth:
-  # Change these values before using the chart in production.
   postgresUser: postgres
-  # postgresPassword: ""  -- must be set explicitly or use existingSecret
-  postgresPassword: postgres
+  # Auto-generated on first install when empty and preserved on upgrades.
+  postgresPassword: ""
   postgresDatabase: postgres
   # Used only when cluster.enabled is true. Replicas connect to the primary
   # with this role for physical streaming replication.
   replicationUser: replicator
-  # replicationPassword: ""  -- must be set explicitly or use existingSecret
-  replicationPassword: replicator-password
+  # Auto-generated on first install when empty and preserved on upgrades.
+  replicationPassword: ""
   # Set this to use a pre-created Secret instead of rendering secret.yaml.
   # The Secret must contain keys POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB,
   # POSTGRES_REPLICATION_USER, POSTGRES_REPLICATION_PASSWORD.
   existingSecret: ""
 
 service:
+  type: ClusterIP
+  port: 5432
+  annotations: {}
+
+containerPorts:
+  postgres: 5432
+
+readOnlyService:
+  enabled: true
   type: ClusterIP
   port: 5432
   annotations: {}
@@ -46,6 +62,11 @@ cluster:
   # How long replicas wait between primary readiness checks during bootstrap.
   replicaBootstrapCheckIntervalSeconds: 5
 
+postgresql:
+  parameters:
+    password_encryption: scram-sha-256
+  extraArgs: []
+
 persistence:
   enabled: true
   size: 8Gi
@@ -55,6 +76,11 @@ persistence:
   accessModes:
     - ReadWriteOnce
   annotations: {}
+
+persistentVolumeClaimRetentionPolicy:
+  enabled: false
+  whenDeleted: Retain
+  whenScaled: Retain
 
 volumePermissions:
   enabled: true
@@ -85,6 +111,13 @@ resources:
     cpu: 500m
     memory: 512Mi
 
+startupProbe:
+  enabled: true
+  initialDelaySeconds: 10
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 30
+
 readinessProbe:
   enabled: true
   initialDelaySeconds: 10
@@ -98,6 +131,11 @@ livenessProbe:
   periodSeconds: 10
   timeoutSeconds: 5
   failureThreshold: 6
+
+pdb:
+  enabled: true
+  maxUnavailable: 1
+  minAvailable: ""
 
 podAnnotations: {}
 podLabels: {}
@@ -120,8 +158,29 @@ securityContext:
 nodeSelector: {}
 tolerations: []
 affinity: {}
+topologySpreadConstraints: []
+priorityClassName: ""
 
 updateStrategy:
   type: RollingUpdate
 
 terminationGracePeriodSeconds: 30
+
+networkPolicy:
+  enabled: false
+  policyTypes:
+    - Ingress
+  ingress:
+    - {}
+  egress: []
+
+# Prometheus ServiceMonitor configuration.
+# Deploys a monitoring.coreos.com/v1 ServiceMonitor so the Prometheus
+# Operator auto-discovers PostgreSQL metrics endpoints.
+serviceMonitor:
+  enabled: false
+  labels: {}
+  endpoints:
+    - port: postgres
+      interval: 30s
+      path: /metrics

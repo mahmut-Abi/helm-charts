@@ -21,6 +21,29 @@ spec:
     {{- else }}
     {{- include "postgres.selectorLabels" . | nindent 4 }}
     {{- end }}
+{{- if and .Values.cluster.enabled .Values.readOnlyService.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "postgres.readOnlyServiceName" . }}
+  labels:
+    {{- include "postgres.labels" . | nindent 4 }}
+    app.kubernetes.io/component: replica
+  {{- with .Values.readOnlyService.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.readOnlyService.type }}
+  ports:
+    - name: postgres
+      port: {{ .Values.readOnlyService.port }}
+      targetPort: postgres
+      protocol: TCP
+  selector:
+    {{- include "postgres.replicaSelectorLabels" . | nindent 4 }}
+{{- end }}
 ---
 apiVersion: v1
 kind: Service

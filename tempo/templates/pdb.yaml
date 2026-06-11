@@ -1,4 +1,7 @@
-{{- if gt (int .Values.replicaCount) 1 }}
+{{- $pdb := default dict (get .Values "podDisruptionBudget") -}}
+{{- $pdbEnabled := true -}}
+{{- if hasKey $pdb "enabled" }}{{- $pdbEnabled = get $pdb "enabled" }}{{- end }}
+{{- if and $pdbEnabled (gt (int .Values.replicaCount) 1) }}
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
@@ -6,7 +9,7 @@ metadata:
   labels:
     {{- include "tempo.labels" . | nindent 4 }}
 spec:
-  maxUnavailable: 1
+  maxUnavailable: {{ get $pdb "maxUnavailable" | default 1 }}
   selector:
     matchLabels:
       {{- include "tempo.selectorLabels" . | nindent 6 }}

@@ -11,12 +11,18 @@ image:
     pullPolicy: IfNotPresent
   kafkaUi:
     repository: provectuslabs/kafka-ui
-    tag: "latest"
+    tag: "v0.7.2"
     pullPolicy: IfNotPresent
 
 imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
+
+serviceAccount:
+  create: false
+  name: ""
+  annotations: {}
+  automountServiceAccountToken: false
 
 # Number of Kafka broker replicas. Must be >= 1.
 # For KRaft quorum, use an odd number (3, 5, ...).
@@ -30,10 +36,10 @@ auth:
   # Each user gets a SCRAM-SHA-256 credential.
   clientUsers: []
   # - user: admin
-  #   password: admin-secret
+  #   password: strong-random-password
   # interBrokerUser and interBrokerPassword for inter-broker communication.
+  # Leave interBrokerPassword empty to generate it on first install and reuse it on upgrade.
   interBrokerUser: kafka
-  # interBrokerPassword: ""
   interBrokerPassword: ""
   # Set this to use a pre-created Secret instead of rendering secret.yaml.
   # The Secret should contain keys matching the SASL credentials.
@@ -41,6 +47,9 @@ auth:
 
 # KRaft-specific settings.
 kraft:
+  # Keep this value stable for the lifetime of existing PVCs. If empty, the
+  # chart derives a deterministic ID from the release name.
+  clusterId: ""
   # Port used for controller-to-controller and broker-to-controller communication.
   controllerPort: 9093
   # Metadata log directory (stores KRaft metadata). Defaults to the first log directory.
@@ -69,6 +78,11 @@ persistence:
   kraftDedicated: false
   # Storage size for dedicated KRaft metadata volume.
   kraftSize: 10Gi
+
+persistentVolumeClaimRetentionPolicy:
+  enabled: false
+  whenDeleted: Retain
+  whenScaled: Retain
 
 # Volume permissions init container (for fixing PVC ownership).
 volumePermissions:
@@ -115,6 +129,13 @@ readinessProbe:
   timeoutSeconds: 5
   failureThreshold: 6
 
+startupProbe:
+  enabled: true
+  initialDelaySeconds: 10
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 30
+
 livenessProbe:
   enabled: true
   initialDelaySeconds: 60
@@ -139,9 +160,12 @@ securityContext:
 podAnnotations: {}
 podLabels: {}
 
+priorityClassName: ""
+
 nodeSelector: {}
 tolerations: []
 affinity: {}
+topologySpreadConstraints: []
 
 updateStrategy:
   type: RollingUpdate
@@ -165,6 +189,36 @@ kafkaUi:
       memory: 512Mi
   podAnnotations: {}
   podLabels: {}
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
+    seccompProfile:
+      type: RuntimeDefault
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    seccompProfile:
+      type: RuntimeDefault
+  readinessProbe:
+    enabled: true
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 6
+  livenessProbe:
+    enabled: true
+    initialDelaySeconds: 30
+    periodSeconds: 20
+    timeoutSeconds: 5
+    failureThreshold: 6
+  priorityClassName: ""
   nodeSelector: {}
   tolerations: []
   affinity: {}
@@ -184,3 +238,23 @@ kafkaUi:
     gatewayName: ""
     gatewayNamespace: ""
     hostname: ""
+
+# Prometheus ServiceMonitor for automatic metric scraping.
+serviceMonitor:
+  enabled: false
+  labels: {}
+  endpoints:
+    - port: metrics
+      interval: 30s
+      path: /metrics
+
+# NetworkPolicy restricts ingress/egress traffic to Kafka pods.
+# When enabled, only the rules defined below are allowed;
+# all other traffic is denied unless explicitly listed.
+networkPolicy:
+  enabled: false
+  policyTypes:
+    - Ingress
+  ingress:
+    - {}
+  egress: []

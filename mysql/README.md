@@ -2,15 +2,17 @@
 
 This chart deploys MySQL in either standalone mode or a GTID-based primary-replica replication mode.
 
+## Quick Start
+
+```bash
+helm install mysql ./mysql
+```
+
 ## Modes
 
 ### Standalone
 
 Standalone mode is the default. It creates one StatefulSet, one client Service, one headless Service, one Secret (unless `auth.existingSecret` is set), and one PVC per pod.
-
-```bash
-helm install mysql ./mysql --set auth.rootPassword=my-secret-pw
-```
 
 ### Cluster Mode
 
@@ -21,8 +23,6 @@ Cluster mode creates two StatefulSets:
 
 ```bash
 helm install mysql ./mysql \
-  --set auth.rootPassword=my-secret-pw \
-  --set auth.replicationPassword=repl-pw \
   --set cluster.enabled=true \
   --set cluster.replicas=3
 ```
@@ -70,23 +70,26 @@ kubectl exec -n <namespace> <release>-mysql-primary-0 -- \
 
 | Value | Description | Default |
 |---|---|---|
-| `auth.rootPassword` | MySQL root password | `""` |
+| `auth.rootPassword` | MySQL root password; empty generates and reuses a Secret value | `""` |
 | `auth.database` | Optional initial database | `""` |
 | `auth.user` | Optional application user | `""` |
-| `auth.password` | Optional application password | `""` |
+| `auth.password` | Optional application password; empty generates one when `auth.user` is set | `""` |
 | `auth.existingSecret` | Use an existing Secret instead of rendering one | `""` |
 | `auth.replicationUser` | Replication role for GTID replicas | `replicator` |
-| `auth.replicationPassword` | Replication role password | `replicator-password` |
+| `auth.replicationPassword` | Replication role password; empty generates and reuses a Secret value | `""` |
 | `cluster.enabled` | Enable primary plus replica StatefulSets | `false` |
 | `cluster.replicas` | Total pods in cluster mode (min 3) | `3` |
 | `persistence.enabled` | Create PVCs for data | `true` |
 | `persistence.size` | PVC size | `8Gi` |
+| `mysql.extraConfiguration` | Extra `mysqld` configuration for standalone, primary, and replicas | `""` |
+| `mysql.primaryExtraConfiguration` | Extra `mysqld` configuration only for the primary pod | `""` |
+| `mysql.replicaExtraConfiguration` | Extra `mysqld` configuration only for replica pods | `""` |
 | `resources` | Container CPU/memory requests and limits | `{requests: {cpu: 100m, memory: 256Mi}, limits: {cpu: 500m, memory: 512Mi}}` |
 | `volumePermissions.enabled` | Run an initContainer to fix PVC ownership | `true` |
 
 ## Security Notes
 
-- Set `auth.rootPassword` explicitly or use `auth.existingSecret` to supply your own Secret.
+- Leave password values empty only if you want Helm to generate and then reuse the chart-managed Secret. For production GitOps, prefer `auth.existingSecret` or explicit values sourced from a secret manager.
 - The main MySQL container runs as a non-root user by default (UID 999).
 - `volumePermissions` uses a short-lived root initContainer to set PVC ownership, then the main container runs non-root.
 - Service account token automount is disabled on all StatefulSet pods.

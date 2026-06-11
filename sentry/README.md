@@ -12,8 +12,8 @@ This chart deploys [Sentry](https://sentry.io), an open-source error tracking an
 | **Relay** | Deployment | Event ingestion proxy — SDKs send events here (port 3000) |
 | **Snuba API** | Deployment | ClickHouse query service for event search and aggregation |
 | **Snuba Consumer** | Deployment | Kafka consumer that writes events to ClickHouse |
-| **Taskbroker** | Deployment | gRPC task broker (port 50051) — replaces Celery/Redis broker |
-| **Upgrade Job** | Helm hook | Runs `sentry upgrade --noinput` on install/upgrade, auto-creates database |
+| **Taskbroker** | StatefulSet | gRPC task broker (port 50051) with persisted SQLite task state |
+| **Upgrade Job** | Job | Runs `sentry upgrade --noinput` on install/upgrade, auto-creates databases |
 
 ## External Dependencies
 
@@ -72,6 +72,8 @@ helm install sentry ./sentry \
 
 The worker needs `--rpc-host` pointing at the taskbroker gRPC service. This is wired automatically: the taskbroker creates a headless service `<release>-sentry-taskbroker:50051` and the worker deployment passes that to `sentry run taskworker --rpc-host=<release>-sentry-taskbroker.<namespace>.svc.cluster.local:50051`.
 
+Taskbroker stores inflight task state in SQLite. The chart keeps it as a single-replica StatefulSet and enables a 1Gi PVC by default. For short-lived test clusters without a StorageClass, set `taskbroker.persistence.enabled=false`.
+
 The cron deployment runs `sentry run taskworker-scheduler` and does not connect to the taskbroker directly.
 
 ## Relay Initialization
@@ -107,17 +109,25 @@ Snuba has two components — API and consumer. The consumer reads events from Ka
 | `kafka.autoCreateTopics` | Auto-create Kafka topics for snuba | `true` |
 | `clickhouse.host` | ClickHouse hostname | `""` |
 | `clickhouse.password` | ClickHouse password | `""` |
+| `clickhouse.singleNode` | Use single-node ClickHouse settings | `true` |
+| `clickhouse.clusterName` | ClickHouse cluster name used when `singleNode=false` | `default` |
 | `filestore.backend` | File storage backend (`filesystem`, `s3`, or `gcs`) | `filesystem` |
+| `filestore.s3.existingSecret` | Secret containing S3 filestore credentials | `""` |
 | `system.url` | Public URL (email links, etc.) | `http://localhost:9000` |
 | `service.type` | Web Service type | `ClusterIP` |
 | `ingress.enabled` | Enable Ingress | `false` |
 | `gateway.enabled` | Enable Gateway API HTTPRoute | `false` |
 | `taskbroker.enabled` | Deploy the taskbroker | `true` |
+| `taskbroker.kafkaTopic` | Taskbroker Kafka topic | `taskworker` |
+| `taskbroker.persistence.enabled` | Persist taskbroker SQLite state | `true` |
+| `upgrade.enabled` | Run revisioned migration/database setup job | `true` |
 | `web.replicas` | Web pods | `1` |
 | `worker.replicas` | Worker pods | `1` |
+| `worker.concurrency` | Taskworker process concurrency per pod | `4` |
 | `relay.replicas` | Relay pods | `1` |
 | `snuba.api.replicas` | Snuba API pods | `1` |
 | `snuba.consumer.replicas` | Snuba consumer pods | `1` |
+| `snuba.consumer.resources` | Resources applied to each Snuba consumer container | requests set |
 
 ## Cleanup
 
@@ -125,7 +135,7 @@ Snuba has two components — API and consumer. The consumer reads events from Ka
 helm uninstall sentry -n <namespace>
 ```
 
-Manually clean up knowledge-check PVCs if filestore persistence was enabled:
+Manually clean up PVCs if filestore or taskbroker persistence was enabled:
 
 ```bash
 kubectl delete pvc -n <namespace> -l app.kubernetes.io/instance=sentry

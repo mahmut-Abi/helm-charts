@@ -10,6 +10,11 @@ spec:
   replicas: {{ int .Values.keeper.replicas }}
   podManagementPolicy: Parallel
   serviceName: {{ include "clickhouse.keeperHeadlessServiceName" . }}
+  {{- if and .Values.persistence.enabled .Values.persistentVolumeClaimRetentionPolicy.enabled }}
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: {{ .Values.persistentVolumeClaimRetentionPolicy.whenDeleted }}
+    whenScaled: {{ .Values.persistentVolumeClaimRetentionPolicy.whenScaled }}
+  {{- end }}
   selector:
     matchLabels:
       {{- include "clickhouse.keeperSelectorLabels" . | nindent 6 }}
@@ -18,13 +23,17 @@ spec:
       labels:
         {{- include "clickhouse.keeperSelectorLabels" . | nindent 8 }}
     spec:
-      automountServiceAccountToken: false
+      serviceAccountName: {{ include "clickhouse.serviceAccountName" . }}
+      automountServiceAccountToken: {{ .Values.serviceAccount.automountServiceAccountToken }}
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       securityContext:
         {{- toYaml .Values.keeper.podSecurityContext | nindent 8 }}
+      {{- with .Values.priorityClassName }}
+      priorityClassName: {{ . | quote }}
+      {{- end }}
       initContainers:
         {{- if .Values.volumePermissions.enabled }}
         - name: volume-permissions
@@ -124,6 +133,20 @@ spec:
             initialDelaySeconds: 15
             periodSeconds: 10
             failureThreshold: 12
+          {{- if .Values.startupProbe.enabled }}
+          startupProbe:
+            exec:
+              command:
+                - clickhouse-client
+                - --database
+                - default
+                - --query
+                - SELECT 1
+            initialDelaySeconds: {{ .Values.startupProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.startupProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.startupProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.startupProbe.failureThreshold }}
+          {{- end }}
           resources:
             {{- toYaml .Values.keeper.resources | nindent 12 }}
           volumeMounts:

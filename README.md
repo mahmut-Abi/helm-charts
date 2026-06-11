@@ -13,9 +13,26 @@ This repository contains independent Helm charts:
 - `langfuse` — Langfuse LLM observability platform
 - `sentry` — Sentry 26.x error tracking and performance monitoring
 - `opensearch` — OpenSearch standalone or clustered with security
+- `tempo` — Grafana Tempo tracing backend
 
 Each chart owns its own templates, values, Secrets, Services, and StatefulSets.
 They do not depend on each other.
+
+When password values are left empty, charts that manage credentials generate strong Kubernetes Secret values on first install and reuse them on upgrade with Helm `lookup`. For production GitOps, prefer `existingSecret` or explicit values sourced from a secret manager so credentials are controlled outside the Helm release manifest.
+
+## Production Profiles
+
+Each chart has a `values-production.yaml` example with larger resources, retained PVCs, external Secret references, and production-oriented cluster settings:
+
+```bash
+helm upgrade --install <release> ./<chart> -f ./<chart>/values-production.yaml
+```
+
+These files are intentionally examples, not blind defaults. Replace every placeholder StorageClass, Secret name, public URL, object-store endpoint, TLS secret, and dependency hostname before using them in a real environment.
+
+Monitoring is conservative by default. `ServiceMonitor` is enabled only where the chart itself exposes a known metrics endpoint, such as OpenTelemetry Collector, Tempo, and ClickHouse with `metrics.enabled=true`. For PostgreSQL, Redis, MongoDB, MySQL, RabbitMQ, Kafka, OpenSearch, Sentry, and Langfuse, add the appropriate exporter/plugin or verified metrics endpoint before enabling their `serviceMonitor` values.
+
+Tempo remains a monolithic chart. The production profile uses S3 and a larger single replica; for very high ingest volume or horizontal scaling, use a distributed Tempo deployment instead of increasing `replicaCount` on this chart.
 
 ## PostgreSQL
 
@@ -63,19 +80,20 @@ helm install kafka ./kafka
 # With SASL authentication
 helm install kafka ./kafka \
   --set auth.enabled=true \
-  --set auth.interBrokerPassword=changeme \
-  --set 'auth.clientUsers[0].user=admin,auth.clientUsers[0].password=changeme'
+  --set 'auth.clientUsers[0].user=admin' \
+  --set 'auth.clientUsers[0].password=<strong-random-password>'
 ```
 
 ## MongoDB
 
+The chart defaults to MongoDB 7.0 for compatibility with Linux 6.19+ kernels.
+
 ```bash
 # Standalone
-helm install mongodb ./mongodb --set auth.rootPassword=my-secret-pw
+helm install mongodb ./mongodb
 
 # Replica set with 3 members
 helm install mongodb ./mongodb \
-  --set auth.rootPassword=my-secret-pw \
   --set cluster.enabled=true \
   --set cluster.members=3
 ```
@@ -84,11 +102,10 @@ helm install mongodb ./mongodb \
 
 ```bash
 # Standalone
-helm install mysql ./mysql --set auth.rootPassword=my-secret-pw
+helm install mysql ./mysql
 
 # Primary-replica with 1 primary + 2 replicas
 helm install mysql ./mysql \
-  --set auth.rootPassword=my-secret-pw \
   --set cluster.enabled=true \
   --set cluster.replicas=3
 ```
@@ -97,12 +114,10 @@ helm install mysql ./mysql \
 
 ```bash
 # Standalone
-helm install rabbitmq ./rabbitmq --set auth.defaultPass=my-secret-pw
+helm install rabbitmq ./rabbitmq
 
 # Cluster with 3 nodes
 helm install rabbitmq ./rabbitmq \
-  --set auth.defaultPass=my-secret-pw \
-  --set auth.erlangCookie=shared-secret \
   --set cluster.enabled=true \
   --set cluster.replicas=3
 ```
@@ -115,7 +130,9 @@ helm install otel ./otel
 
 # Export to a backend
 helm install otel ./otel \
-  --set config.exporters.otlp.endpoint=tempo.default.svc.cluster.local:4317
+  --set config.exporters.otlp.endpoint=tempo.default.svc.cluster.local:4317 \
+  --set config.exporters.otlp.tls.insecure=true \
+  --set 'config.service.pipelines.traces.exporters[1]=otlp'
 ```
 
 ## Langfuse
@@ -124,9 +141,6 @@ Langfuse needs PostgreSQL, ClickHouse, and Redis as external dependencies.
 
 ```bash
 helm install langfuse ./langfuse \
-  --set auth.salt=$(openssl rand -hex 16) \
-  --set auth.encryptionKey=$(openssl rand -hex 32) \
-  --set auth.nextauthSecret=$(openssl rand -hex 32) \
   --set auth.nextauthUrl=https://langfuse.example.com \
   --set postgres.host=postgres \
   --set postgres.password=<pg-password> \
@@ -141,7 +155,6 @@ Sentry 26.x needs PostgreSQL, Redis, ClickHouse, and Kafka as external dependenc
 
 ```bash
 helm install sentry ./sentry \
-  --set auth.secretKey=$(openssl rand -hex 32) \
   --set user.password=$(openssl rand -hex 16) \
   --set postgres.host=postgres \
   --set postgres.password=<pg-password> \
@@ -164,12 +177,35 @@ helm install os ./opensearch --set cluster.enabled=true --set cluster.replicas=3
 
 # Disable security (development only)
 helm install os ./opensearch --set security.disabled=true
+
+# Production TLS: do not use bundled demo certificates
+helm install os ./opensearch \
+  --set security.useDemoCerts=false \
+  --set security.tls.existingSecret=os-tls \
+  --set 'security.tls.adminDn[0]=CN=admin' \
+  --set 'security.tls.nodesDn[0]=CN=opensearch'
+```
+
+## Tempo
+
+```bash
+helm install tempo ./tempo
+
+# Use object storage for production retention beyond local disk
+helm install tempo ./tempo \
+  --set storage.backend=s3 \
+  --set storage.s3.bucket=tempo-traces \
+  --set storage.s3.endpoint=https://s3.amazonaws.com \
+  --set storage.s3.region=us-east-1 \
+  --set storage.s3.existingSecret=tempo-s3
 ```
 
 ## Validation
 
 ```bash
-helm lint postgres redis clickhouse kafka mongodb mysql rabbitmq otel langfuse sentry opensearch
+for d in */; do helm lint "$d" && helm template test "$d" >/dev/null; done
+for d in */; do [ -f "$d/values-production.yaml" ] && helm template prod "$d" -f "$d/values-production.yaml" >/dev/null; done
+
 helm template pg ./postgres
 helm template redis ./redis
 helm template ch ./clickhouse
@@ -181,4 +217,5 @@ helm template otel ./otel
 helm template langfuse ./langfuse
 helm template sentry ./sentry
 helm template os ./opensearch
+helm template tempo ./tempo
 ```

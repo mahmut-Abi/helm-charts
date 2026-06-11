@@ -1,0 +1,68 @@
+# High-load monolithic production example. Replace S3 settings and Secret names before use.
+replicaCount: 1
+
+serviceAccount:
+  create: true
+  automountServiceAccountToken: false
+
+storage:
+  backend: s3
+  s3:
+    bucket: tempo-traces
+    endpoint: https://s3.example.com
+    region: us-east-1
+    insecure: false
+    existingSecret: tempo-s3
+    secretKeys:
+      accessKey: TEMPO_S3_ACCESS_KEY
+      secretKey: TEMPO_S3_SECRET_KEY
+
+tempo:
+  ingester:
+    traceIdlePeriod: 10s
+    maxBlockBytes: 16777216
+    maxBlockDuration: 15m
+  compactor:
+    compaction:
+      blockRetention: 168h
+      compactedBlockRetention: 1h
+  queryFrontend:
+    maxOutstandingPerTenant: 4000
+  metricsGenerator:
+    enabled: false
+  overrides:
+    defaults:
+      ingestion:
+        rate_limit_bytes: 50000000
+        burst_size_bytes: 100000000
+      metrics_generator:
+        processors:
+          - service-graphs
+          - span-metrics
+
+resources:
+  requests:
+    cpu: 4
+    memory: 8Gi
+  limits:
+    cpu: 8
+    memory: 16Gi
+
+podDisruptionBudget:
+  enabled: false
+
+serviceMonitor:
+  enabled: true
+  labels:
+    release: prometheus
+
+networkPolicy:
+  enabled: true
+  policyTypes:
+    - Ingress
+    - Egress
+  # Replace allow-all with precise telemetry producer and object-store selectors in production.
+  ingress:
+    - {}
+  egress:
+    - {}

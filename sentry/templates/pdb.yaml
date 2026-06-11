@@ -1,0 +1,159 @@
+{{- if and .Values.pdb.enabled .Values.web.enabled (gt (int .Values.web.replicas) 1) }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "sentry.fullname" . }}-web
+  labels:
+    {{- include "sentry.webSelectorLabels" . | nindent 4 }}
+    {{- include "sentry.labels" . | nindent 4 }}
+spec:
+  {{- with .Values.pdb.minAvailable }}
+  minAvailable: {{ . }}
+  {{- end }}
+  {{- with .Values.pdb.maxUnavailable }}
+  maxUnavailable: {{ . }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "sentry.webSelectorLabels" . | nindent 6 }}
+{{- end }}
+{{- if and .Values.pdb.enabled .Values.worker.enabled (gt (int .Values.worker.replicas) 1) }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "sentry.fullname" . }}-worker
+  labels:
+    {{- include "sentry.workerSelectorLabels" . | nindent 4 }}
+    {{- include "sentry.labels" . | nindent 4 }}
+spec:
+  {{- with .Values.pdb.minAvailable }}
+  minAvailable: {{ . }}
+  {{- end }}
+  {{- with .Values.pdb.maxUnavailable }}
+  maxUnavailable: {{ . }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "sentry.workerSelectorLabels" . | nindent 6 }}
+{{- end }}
+{{- if and .Values.pdb.enabled .Values.cron.enabled (gt (int .Values.cron.replicas) 1) }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "sentry.fullname" . }}-cron
+  labels:
+    {{- include "sentry.cronSelectorLabels" . | nindent 4 }}
+    {{- include "sentry.labels" . | nindent 4 }}
+spec:
+  {{- with .Values.pdb.minAvailable }}
+  minAvailable: {{ . }}
+  {{- end }}
+  {{- with .Values.pdb.maxUnavailable }}
+  maxUnavailable: {{ . }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "sentry.cronSelectorLabels" . | nindent 6 }}
+{{- end }}
+{{- if and .Values.pdb.enabled .Values.relay.enabled (gt (int .Values.relay.replicas) 1) }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "sentry.fullname" . }}-relay
+  labels:
+    {{- include "sentry.relaySelectorLabels" . | nindent 4 }}
+    {{- include "sentry.labels" . | nindent 4 }}
+spec:
+  {{- with .Values.pdb.minAvailable }}
+  minAvailable: {{ . }}
+  {{- end }}
+  {{- with .Values.pdb.maxUnavailable }}
+  maxUnavailable: {{ . }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "sentry.relaySelectorLabels" . | nindent 6 }}
+{{- end }}
+{{- if and .Values.pdb.enabled .Values.snuba.api.enabled (gt (int .Values.snuba.api.replicas) 1) }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "sentry.fullname" . }}-snuba-api
+  labels:
+    {{- include "sentry.snubaApiSelectorLabels" . | nindent 4 }}
+    {{- include "sentry.labels" . | nindent 4 }}
+spec:
+  {{- with .Values.pdb.minAvailable }}
+  minAvailable: {{ . }}
+  {{- end }}
+  {{- with .Values.pdb.maxUnavailable }}
+  maxUnavailable: {{ . }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "sentry.snubaApiSelectorLabels" . | nindent 6 }}
+{{- end }}
+{{- if and .Values.pdb.enabled .Values.snuba.consumer.enabled (gt (int .Values.snuba.consumer.replicas) 1) }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "sentry.fullname" . }}-snuba-consumer
+  labels:
+    {{- include "sentry.snubaConsumerSelectorLabels" . | nindent 4 }}
+    {{- include "sentry.labels" . | nindent 4 }}
+spec:
+  {{- with .Values.pdb.minAvailable }}
+  minAvailable: {{ . }}
+  {{- end }}
+  {{- with .Values.pdb.maxUnavailable }}
+  maxUnavailable: {{ . }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "sentry.snubaConsumerSelectorLabels" . | nindent 6 }}
+{{- end }}
+{{- if and .Values.pdb.enabled .Values.ingestConsumer.enabled (gt (int .Values.ingestConsumer.replicas) 1) }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "sentry.fullname" . }}-ingest-consumer
+  labels:
+    {{- include "sentry.ingestConsumerSelectorLabels" . | nindent 4 }}
+    {{- include "sentry.labels" . | nindent 4 }}
+spec:
+  {{- with .Values.pdb.minAvailable }}
+  minAvailable: {{ . }}
+  {{- end }}
+  {{- with .Values.pdb.maxUnavailable }}
+  maxUnavailable: {{ . }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "sentry.ingestConsumerSelectorLabels" . | nindent 6 }}
+{{- end }}
+{{- if and .Values.pdb.enabled .Values.taskbroker.enabled (gt (int .Values.taskbroker.replicas) 1) }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "sentry.fullname" . }}-taskbroker
+  labels:
+    {{- include "sentry.taskbrokerSelectorLabels" . | nindent 4 }}
+    {{- include "sentry.labels" . | nindent 4 }}
+spec:
+  {{- with .Values.pdb.minAvailable }}
+  minAvailable: {{ . }}
+  {{- end }}
+  {{- with .Values.pdb.maxUnavailable }}
+  maxUnavailable: {{ . }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "sentry.taskbrokerSelectorLabels" . | nindent 6 }}
+{{- end }}

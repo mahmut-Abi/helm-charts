@@ -8,6 +8,7 @@ metadata:
     {{- include "langfuse.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.worker.replicas }}
+  revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
   selector:
     matchLabels:
       {{- include "langfuse.workerSelectorLabels" . | nindent 6 }}
@@ -23,7 +24,8 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
     spec:
-      automountServiceAccountToken: false
+      serviceAccountName: {{ include "langfuse.serviceAccountName" . }}
+      automountServiceAccountToken: {{ .Values.serviceAccount.automountServiceAccountToken }}
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
@@ -35,22 +37,14 @@ spec:
           image: {{ printf "%s:%s" .Values.image.initContainer.repository .Values.image.initContainer.tag }}
           imagePullPolicy: {{ .Values.image.initContainer.pullPolicy }}
           securityContext:
-            allowPrivilegeEscalation: false
-            capabilities:
-              drop:
-                - ALL
+            {{- toYaml .Values.initContainer.securityContext | nindent 12 }}
           resources:
-            requests:
-              cpu: 50m
-              memory: 64Mi
-            limits:
-              cpu: 100m
-              memory: 128Mi
+            {{- toYaml .Values.initContainer.resources | nindent 12 }}
           command:
             - sh
             - -c
             - |
-              until curl -sS -u "${CH_USER}:${CH_PASSWORD}" "http://${CH_HOST}:8123/" --data-binary "CREATE DATABASE IF NOT EXISTS ${CH_DB}"; do
+              until curl -sS -u "${CH_USER}:${CH_PASSWORD}" "${CH_SCHEME}://${CH_HOST}:${CH_PORT}/" --data-binary "CREATE DATABASE IF NOT EXISTS ${CH_DB}"; do
                 echo "Waiting for ClickHouse..."
                 sleep 2
               done
@@ -58,20 +52,16 @@ spec:
           env:
             - name: CH_HOST
               value: {{ $chHost | quote }}
+            - name: CH_PORT
+              value: {{ .Values.clickhouse.httpPort | quote }}
+            - name: CH_SCHEME
+              value: {{ ternary "https" "http" .Values.clickhouse.tlsEnabled | quote }}
             - name: CH_USER
               value: {{ .Values.clickhouse.user | quote }}
             - name: CH_DB
               value: {{ .Values.clickhouse.database | quote }}
-            {{- if .Values.clickhouse.password }}
             - name: CH_PASSWORD
-              value: {{ .Values.clickhouse.password | quote }}
-            {{- else if .Values.clickhouse.existingSecret }}
-            - name: CH_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.clickhouse.existingSecret }}
-                  key: {{ default "CLICKHOUSE_PASSWORD" .Values.clickhouse.existingSecretKey }}
-            {{- end }}
+              {{- include "langfuse.clickhousePasswordEnvValue" . | nindent 14 }}
       {{- end }}
       containers:
         - name: langfuse-worker
@@ -100,7 +90,7 @@ spec:
             - name: NEXTAUTH_URL
               value: {{ .Values.auth.nextauthUrl | quote }}
             - name: DATABASE_URL
-              value: {{ include "langfuse.databaseUrl" . | quote }}
+              {{- include "langfuse.databaseUrlEnvValue" . | nindent 14 }}
             {{- if .Values.worker.nodeOptions }}
             - name: NODE_OPTIONS
               value: {{ .Values.worker.nodeOptions | quote }}
@@ -111,20 +101,12 @@ spec:
             {{- end }}
             {{- if or .Values.clickhouse.migrationUrl .Values.clickhouse.url }}
             - name: CLICKHOUSE_MIGRATION_URL
-              value: {{ include "langfuse.clickhouseMigrationUrl" . | quote }}
+              {{- include "langfuse.clickhouseMigrationUrlEnvValue" . | nindent 14 }}
             {{- end }}
             - name: CLICKHOUSE_USER
               value: {{ .Values.clickhouse.user | quote }}
-            {{- if .Values.clickhouse.password }}
             - name: CLICKHOUSE_PASSWORD
-              value: {{ .Values.clickhouse.password | quote }}
-            {{- else if .Values.clickhouse.existingSecret }}
-            - name: CLICKHOUSE_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.clickhouse.existingSecret }}
-                  key: {{ default "CLICKHOUSE_PASSWORD" .Values.clickhouse.existingSecretKey }}
-            {{- end }}
+              {{- include "langfuse.clickhousePasswordEnvValue" . | nindent 14 }}
             - name: CLICKHOUSE_DB
               value: {{ .Values.clickhouse.database | quote }}
             - name: CLICKHOUSE_CLUSTER_ENABLED
@@ -135,9 +117,9 @@ spec:
               value: {{ .Values.clickhouse.tlsEnabled | quote }}
             - name: LANGFUSE_AUTO_CLICKHOUSE_MIGRATION_DISABLED
               value: {{ .Values.clickhouse.autoMigrationDisabled | quote }}
-            {{- if .Values.redis.connectionString }}
+            {{- if or .Values.redis.connectionString .Values.redis.existingSecret }}
             - name: REDIS_CONNECTION_STRING
-              value: {{ .Values.redis.connectionString | quote }}
+              {{- include "langfuse.redisConnectionStringEnvValue" . | nindent 14 }}
             {{- end }}
             {{- if .Values.redis.host }}
             - name: REDIS_HOST
@@ -151,7 +133,6 @@ spec:
             - name: REDIS_TLS_ENABLED
               value: "true"
             {{- end }}
-            {{- if .Values.s3.enabled }}
             - name: LANGFUSE_S3_EVENT_UPLOAD_BUCKET
               value: {{ .Values.s3.bucket | quote }}
             - name: LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT
@@ -159,30 +140,57 @@ spec:
             - name: LANGFUSE_S3_EVENT_UPLOAD_REGION
               value: {{ .Values.s3.region | quote }}
             - name: LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID
-              value: {{ .Values.s3.accessKeyId | quote }}
+              {{- include "langfuse.s3AccessKeyIdEnvValue" . | nindent 14 }}
             - name: LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY
-              value: {{ .Values.s3.secretAccessKey | quote }}
+              {{- include "langfuse.s3SecretAccessKeyEnvValue" . | nindent 14 }}
             - name: LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE
-              value: {{ .Values.s3.forcePathStyle | quote }}
+              value: {{ .Values.s3.forcePathStyle | toString | quote }}
+            {{- with .Values.worker.extraEnv }}
+            {{- toYaml . | nindent 12 }}
             {{- end }}
-            {{- range .Values.worker.extraEnv }}
-            - name: {{ .name }}
-              value: {{ .value | quote }}
-            {{- end }}
+          {{- with .Values.worker.extraEnvFrom }}
+          envFrom:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           resources:
             {{- toYaml .Values.worker.resources | nindent 12 }}
           ports:
             - containerPort: 3030
               name: http
               protocol: TCP
+          {{- if .Values.worker.startupProbe.enabled }}
+          startupProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: {{ .Values.worker.startupProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.worker.startupProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.worker.startupProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.worker.startupProbe.failureThreshold }}
+          {{- end }}
+          {{- if .Values.worker.readinessProbe.enabled }}
+          readinessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: {{ .Values.worker.readinessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.worker.readinessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.worker.readinessProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.worker.readinessProbe.failureThreshold }}
+          {{- end }}
+          {{- if .Values.worker.livenessProbe.enabled }}
           livenessProbe:
             tcpSocket:
-              port: 3030
-            initialDelaySeconds: 30
-            periodSeconds: 30
+              port: http
+            initialDelaySeconds: {{ .Values.worker.livenessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.worker.livenessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.worker.livenessProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.worker.livenessProbe.failureThreshold }}
+          {{- end }}
       {{- with .Values.worker.podSecurityContext }}
       securityContext:
         {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.worker.priorityClassName }}
+      priorityClassName: {{ . | quote }}
       {{- end }}
       {{- with .Values.worker.nodeSelector }}
       nodeSelector:
@@ -194,6 +202,10 @@ spec:
       {{- end }}
       {{- with .Values.worker.tolerations }}
       tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.worker.topologySpreadConstraints }}
+      topologySpreadConstraints:
         {{- toYaml . | nindent 8 }}
       {{- end }}
 {{- end }}

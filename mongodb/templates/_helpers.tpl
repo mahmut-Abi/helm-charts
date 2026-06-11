@@ -83,3 +83,14 @@ Validate cluster-related values.
 {{- end -}}
 {{- end -}}
 {{- end -}}
+
+{{/*
+ServiceAccount name.
+*/}}
+{{- define "mongodb.serviceAccountName" -}}
+{{- if .Values.serviceAccount.create -}}
+{{- default (include "mongodb.fullname" .) .Values.serviceAccount.name -}}
+{{- else -}}
+{{- default "default" .Values.serviceAccount.name -}}
+{{- end -}}
+{{- end -}}

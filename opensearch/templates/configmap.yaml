@@ -1,0 +1,38 @@
+{{- include "opensearch.validateValues" . }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "opensearch.configMapName" . }}
+  labels:
+    {{- include "opensearch.labels" . | nindent 4 }}
+data:
+  opensearch.yml: |
+    cluster.name: {{ .Values.opensearch.clusterName | quote }}
+    network.host: {{ .Values.opensearch.networkHost | quote }}
+    node.name: ${HOSTNAME}
+    node.roles:
+      {{- toYaml .Values.opensearch.nodeRoles | nindent 6 }}
+    {{- if .Values.cluster.enabled }}
+    discovery.seed_hosts:
+      {{- include "opensearch.discoveryHostsYaml" . | nindent 6 }}
+    cluster.initial_cluster_manager_nodes:
+      {{- include "opensearch.initialClusterManagerNodes" . | nindent 6 }}
+    {{- else }}
+    discovery.type: single-node
+    {{- end }}
+    {{- if .Values.security.disabled }}
+    plugins.security.disabled: true
+    {{- else if not .Values.security.useDemoCerts }}
+    plugins.security.ssl.transport.pemcert_filepath: certs/{{ .Values.security.tls.certFile }}
+    plugins.security.ssl.transport.pemkey_filepath: certs/{{ .Values.security.tls.keyFile }}
+    plugins.security.ssl.transport.pemtrustedcas_filepath: certs/{{ .Values.security.tls.caFile }}
+    plugins.security.ssl.transport.enforce_hostname_verification: false
+    plugins.security.ssl.http.enabled: true
+    plugins.security.ssl.http.pemcert_filepath: certs/{{ .Values.security.tls.certFile }}
+    plugins.security.ssl.http.pemkey_filepath: certs/{{ .Values.security.tls.keyFile }}
+    plugins.security.ssl.http.pemtrustedcas_filepath: certs/{{ .Values.security.tls.caFile }}
+    plugins.security.authcz.admin_dn:
+      {{- toYaml .Values.security.tls.adminDn | nindent 6 }}
+    plugins.security.nodes_dn:
+      {{- toYaml .Values.security.tls.nodesDn | nindent 6 }}
+    {{- end }}

@@ -87,9 +87,6 @@ Validate cluster-related values.
 {{- if lt (int .Values.cluster.replicasPerMaster) 0 -}}
 {{- fail "cluster.replicasPerMaster cannot be negative" -}}
 {{- end -}}
-{{- if and .Values.auth.enabled (not .Values.auth.password) -}}
-{{- fail "auth.password is required when auth.enabled is true" -}}
-{{- end -}}
 {{- end -}}
 {{- end -}}
 
@@ -98,4 +95,15 @@ Headless service name.
 */}}
 {{- define "redis.headlessServiceName" -}}
 {{- printf "%s-headless" (include "redis.fullname" .) | trunc 63 | trimSuffix "-" -}}
+{{- end -}}
+
+{{/*
+ServiceAccount name.
+*/}}
+{{- define "redis.serviceAccountName" -}}
+{{- if .Values.serviceAccount.create -}}
+{{- default (include "redis.fullname" .) .Values.serviceAccount.name -}}
+{{- else -}}
+{{- default "default" .Values.serviceAccount.name -}}
+{{- end -}}
 {{- end -}}

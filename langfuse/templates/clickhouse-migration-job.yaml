@@ -1,24 +1,29 @@
-{{- if .Values.clickhouse.url }}
+{{- if and .Values.clickhouseMigrationJob.enabled .Values.clickhouse.url }}
 {{- $chHost := .Values.clickhouse.url | splitList "://" | last | splitList ":" | first }}
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: {{ include "langfuse.fullname" . }}-clickhouse-migration
+  name: {{ include "langfuse.fullname" . }}-clickhouse-migration-{{ .Release.Revision }}
   labels:
     {{- include "langfuse.labels" . | nindent 4 }}
-  annotations:
-    "helm.sh/hook": post-install,post-upgrade
-    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
-    "helm.sh/hook-weight": "5"
 spec:
-  backoffLimit: 3
-  ttlSecondsAfterFinished: 300
+  backoffLimit: {{ .Values.clickhouseMigrationJob.backoffLimit }}
+  ttlSecondsAfterFinished: {{ .Values.clickhouseMigrationJob.ttlSecondsAfterFinished }}
+  activeDeadlineSeconds: {{ .Values.clickhouseMigrationJob.activeDeadlineSeconds }}
   template:
     metadata:
       labels:
         {{- include "langfuse.labels" . | nindent 8 }}
     spec:
-      automountServiceAccountToken: false
+      serviceAccountName: {{ include "langfuse.serviceAccountName" . }}
+      automountServiceAccountToken: {{ .Values.serviceAccount.automountServiceAccountToken }}
+      {{- with .Values.clickhouseMigrationJob.priorityClassName }}
+      priorityClassName: {{ . | quote }}
+      {{- end }}
+      {{- with .Values.clickhouseMigrationJob.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
@@ -29,27 +34,19 @@ spec:
           image: {{ include "langfuse.webImage" . }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           securityContext:
-            allowPrivilegeEscalation: false
-            capabilities:
-              drop:
-                - ALL
+            {{- toYaml .Values.clickhouseMigrationJob.securityContext | nindent 12 }}
           resources:
-            requests:
-              cpu: 250m
-              memory: 512Mi
-            limits:
-              cpu: 1
-              memory: 1Gi
+            {{- toYaml .Values.clickhouseMigrationJob.resources | nindent 12 }}
           command:
             - sh
             - -c
             - |
-              echo "Waiting for ClickHouse at ${CLICKHOUSE_HOST}:8123..."
+              echo "Waiting for ClickHouse at ${CLICKHOUSE_HOST}:${CLICKHOUSE_HTTP_PORT}..."
               retries=0
               until node -e "
-                var h = require('http');
+                var h = require(process.env.CLICKHOUSE_SCHEME === 'https' ? 'https' : 'http');
                 var auth = Buffer.from(process.env.CLICKHOUSE_USER + ':' + process.env.CLICKHOUSE_PASSWORD).toString('base64');
-                var req = h.get({host: process.env.CLICKHOUSE_HOST, port: 8123, path: '/?query=SELECT+1', headers: {Authorization: 'Basic ' + auth}, timeout: 5000}, function(r) {
+                var req = h.get({host: process.env.CLICKHOUSE_HOST, port: Number(process.env.CLICKHOUSE_HTTP_PORT), path: '/?query=SELECT+1', headers: {Authorization: 'Basic ' + auth}, timeout: 5000}, function(r) {
                   r.resume();
                   r.on('end', function() { process.exit(0); });
                 });
@@ -66,10 +63,10 @@ spec:
               done
               echo "ClickHouse ready. Creating database if not exists..."
               node -e "
-                var h = require('http');
+                var h = require(process.env.CLICKHOUSE_SCHEME === 'https' ? 'https' : 'http');
                 var auth = Buffer.from(process.env.CLICKHOUSE_USER + ':' + process.env.CLICKHOUSE_PASSWORD).toString('base64');
                 var body = 'CREATE DATABASE IF NOT EXISTS ' + process.env.CLICKHOUSE_DB;
-                var req = h.request({host: process.env.CLICKHOUSE_HOST, port: 8123, path: '/', method: 'POST', headers: {Authorization: 'Basic ' + auth, 'Content-Length': body.length}, timeout: 10000}, function(r) {
+                var req = h.request({host: process.env.CLICKHOUSE_HOST, port: Number(process.env.CLICKHOUSE_HTTP_PORT), path: '/', method: 'POST', headers: {Authorization: 'Basic ' + auth, 'Content-Length': body.length}, timeout: 10000}, function(r) {
                   r.resume();
                   r.on('end', function() { process.exit(0); });
                 });
@@ -85,20 +82,16 @@ spec:
           env:
             - name: CLICKHOUSE_HOST
               value: {{ $chHost | quote }}
+            - name: CLICKHOUSE_HTTP_PORT
+              value: {{ .Values.clickhouse.httpPort | quote }}
+            - name: CLICKHOUSE_SCHEME
+              value: {{ ternary "https" "http" .Values.clickhouse.tlsEnabled | quote }}
             - name: CLICKHOUSE_USER
               value: {{ .Values.clickhouse.user | quote }}
-            {{- if .Values.clickhouse.password }}
             - name: CLICKHOUSE_PASSWORD
-              value: {{ .Values.clickhouse.password | quote }}
-            {{- else if .Values.clickhouse.existingSecret }}
-            - name: CLICKHOUSE_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.clickhouse.existingSecret }}
-                  key: {{ default "CLICKHOUSE_PASSWORD" .Values.clickhouse.existingSecretKey }}
-            {{- end }}
+              {{- include "langfuse.clickhousePasswordEnvValue" . | nindent 14 }}
             - name: CLICKHOUSE_MIGRATION_URL
-              value: {{ include "langfuse.clickhouseMigrationUrl" . | quote }}
+              {{- include "langfuse.clickhouseMigrationUrlEnvValue" . | nindent 14 }}
             - name: CLICKHOUSE_DB
               value: {{ .Values.clickhouse.database | quote }}
             - name: CLICKHOUSE_CLUSTER_ENABLED

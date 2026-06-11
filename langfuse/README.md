@@ -5,15 +5,13 @@ This chart deploys [Langfuse](https://langfuse.com), an open-source LLM observab
 ## Components
 
 - **Web**: Next.js frontend and API server (Deployment)
-- **Worker**: Background job processor (Deployment) — runs Prisma migrations on startup
+- **Worker**: Background job processor (Deployment) — uses the `langfuse-worker` image and listens on port 3030
+- **ClickHouse Migration Job**: Revisioned Kubernetes Job that runs ClickHouse migrations before readiness-dependent components settle
 
 ## Quick Start
 
 ```bash
 helm install langfuse ./langfuse \
-  --set auth.salt=$(openssl rand -hex 16) \
-  --set auth.encryptionKey=$(openssl rand -hex 32) \
-  --set auth.nextauthSecret=$(openssl rand -hex 32) \
   --set auth.nextauthUrl=https://langfuse.example.com \
   --set postgres.host=postgres \
   --set postgres.password=my-db-password \
@@ -42,23 +40,30 @@ openssl rand -hex 32   # NEXTAUTH_SECRET
 openssl rand -hex 8    # SALT (16 chars)
 ```
 
-Set them via `--set` or a values file. Never commit plaintext secrets.
+Set them via `--set`, a values file, or `auth.existingSecret`. If omitted, the chart generates `SALT`, `ENCRYPTION_KEY`, and `NEXTAUTH_SECRET` on first install and reuses the chart-managed Secret on upgrade. Never commit plaintext secrets.
 
 ## Important Values
 
 | Value | Description | Default |
 |---|---|---|
-| `auth.salt` | Password hashing salt | `""` |
-| `auth.encryptionKey` | 256-bit data encryption key (64 hex chars) | `""` |
-| `auth.nextauthSecret` | NextAuth.js signing secret | `""` |
+| `auth.salt` | Password hashing salt; empty generates and reuses a Secret value | `""` |
+| `auth.encryptionKey` | Data encryption key; empty generates and reuses a Secret value | `""` |
+| `auth.nextauthSecret` | NextAuth.js signing secret; empty generates and reuses a Secret value | `""` |
+| `auth.existingSecret` | Use an existing Secret for Langfuse auth keys | `""` |
 | `auth.nextauthUrl` | Public URL | `http://localhost:3000` |
 | `postgres.host` | PostgreSQL hostname | `""` |
+| `postgres.schema` | PostgreSQL schema used when constructing `DATABASE_URL` | `public` |
 | `postgres.password` | PostgreSQL password | `""` |
 | `clickhouse.url` | ClickHouse HTTP URL | `""` |
+| `clickhouse.httpPort` | ClickHouse HTTP port used by init and migration jobs | `8123` |
+| `clickhouse.tlsEnabled` | Use HTTPS for ClickHouse init and migration checks | `false` |
+| `clickhouseMigrationJob.enabled` | Run revisioned ClickHouse migration Job | `true` |
 | `redis.connectionString` | Redis connection URI | `""` |
 | `s3.enabled` | Enable S3 event storage | `false` |
 | `web.replicas` | Web pods | `1` |
 | `worker.replicas` | Worker pods | `1` |
+| `serviceAccount.create` | Create a dedicated ServiceAccount | `false` |
+| `networkPolicy.enabled` | Render a NetworkPolicy | `false` |
 
 ## Health
 

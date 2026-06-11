@@ -1,0 +1,15 @@
+{{- if not .Values.cluster.enabled }}
+{{- $mysqlConfig := default dict (get .Values "mysql") -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "mysql.fullname" . }}-conf
+  labels:
+    {{- include "mysql.labels" . | nindent 4 }}
+data:
+  custom.cnf: |
+    [mysqld]
+    {{- with (get $mysqlConfig "extraConfiguration") }}
+    {{- . | nindent 4 }}
+    {{- end }}
+{{- end }}

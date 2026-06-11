@@ -2,15 +2,17 @@
 
 This chart deploys PostgreSQL in either standalone mode or a simple streaming-replication cluster mode.
 
+## Quick Start
+
+```bash
+helm install pg ./postgres
+```
+
 ## Modes
 
 ### Standalone
 
 Standalone mode is the default. It creates one StatefulSet, one client Service, one headless Service, one Secret (unless `auth.existingSecret` is set), and one PVC per pod.
-
-```bash
-helm install pg ./postgres
-```
 
 Increase `replicaCount` only if you intentionally want multiple independent PostgreSQL pods. Standalone mode does not configure replication.
 
@@ -68,11 +70,11 @@ kubectl exec -n <namespace> <release>-postgres-primary-0 -- \
 | Value | Description | Default |
 |---|---|---|
 | `auth.postgresUser` | PostgreSQL superuser | `postgres` |
-| `auth.postgresPassword` | PostgreSQL password | `postgres` |
+| `auth.postgresPassword` | PostgreSQL password; empty generates and reuses a Secret value | `""` |
 | `auth.postgresDatabase` | Initial database | `postgres` |
 | `auth.existingSecret` | Use an existing Secret instead of rendering one | `""` |
 | `auth.replicationUser` | Replication role for streaming replicas | `replicator` |
-| `auth.replicationPassword` | Replication role password | `replicator-password` |
+| `auth.replicationPassword` | Replication role password; empty generates and reuses a Secret value | `""` |
 | `cluster.enabled` | Enable primary plus replica StatefulSets | `false` |
 | `cluster.replicas` | Total pods in cluster mode | `3` |
 | `persistence.enabled` | Create PVCs for data | `true` |
@@ -82,7 +84,7 @@ kubectl exec -n <namespace> <release>-postgres-primary-0 -- \
 
 ## Security Notes
 
-- Change all default passwords before production use, or use `auth.existingSecret` to supply your own Secret.
+- Leave password values empty only if you want Helm to generate and then reuse the chart-managed Secret. For production GitOps, prefer `auth.existingSecret` or explicit values sourced from a secret manager.
 - The main PostgreSQL container runs as a non-root user by default.
 - `volumePermissions` uses a short-lived root initContainer to set PVC ownership, then the main container runs non-root.
 - Service account token automount is disabled on all StatefulSet pods.

@@ -2,13 +2,15 @@
 
 This chart deploys [Grafana Tempo](https://grafana.com/docs/tempo/latest/), a distributed tracing backend. Tempo stores traces and provides a query API — it does not index traces, making it cost-efficient and operationally simple.
 
-## Monolithic Mode
-
-Monolithic mode is the default. All Tempo components (distributor, ingester, compactor, querier, query-frontend, metrics-generator) run in a single Deployment.
+## Quick Start
 
 ```bash
 helm install tempo ./tempo
 ```
+
+## Monolithic Mode
+
+Monolithic mode is the default. All Tempo components (distributor, ingester, compactor, querier, query-frontend, metrics-generator) run in a single Deployment.
 
 ### With S3 Storage
 
@@ -39,7 +41,7 @@ helm install tempo ./tempo \
 | OTLP gRPC | 4317 | gRPC | Receive traces from OTel Collector / SDKs |
 | OTLP HTTP | 4318 | HTTP | Receive traces via OTLP/HTTP |
 | Tempo HTTP API | 3200 | HTTP | Query traces, health checks |
-| Tempo Metrics | 3100 | HTTP | Prometheus metrics endpoint |
+| Tempo Metrics | 3200 | HTTP | Prometheus metrics endpoint at `/metrics` |
 
 ## Querying Traces
 
@@ -62,14 +64,19 @@ curl http://localhost:3200/api/traces/<trace-id> | jq
 | `image.tag` | Tempo version | `2.7.1` |
 | `replicaCount` | Number of replicas | `1` |
 | `storage.backend` | Storage backend (`local` or `s3`) | `local` |
-| `storage.local.persistence.enabled` | Create a PVC for local storage | `true` |
-| `storage.local.persistence.size` | PVC size | `10Gi` |
+| `storage.local.data.persistence.enabled` | Create a PVC for local trace blocks | `true` |
+| `storage.local.data.persistence.size` | Trace block PVC size | `10Gi` |
+| `storage.local.wal.persistence.enabled` | Create a PVC for local WAL | `true` |
+| `storage.local.wal.persistence.size` | WAL PVC size | `5Gi` |
 | `storage.s3.bucket` | S3 bucket name | `""` |
 | `storage.s3.endpoint` | S3 endpoint URL | `""` |
 | `storage.s3.accessKey` | S3 access key | `""` |
 | `storage.s3.secretKey` | S3 secret key | `""` |
+| `storage.s3.existingSecret` | Secret containing S3 credentials | `""` |
+| `serviceAccount.automountServiceAccountToken` | Mount Kubernetes API token into pods | `false` |
 | `tempo.compactor.compaction.blockRetention` | Trace retention period | `48h` |
 | `tempo.metricsGenerator.enabled` | Enable metrics generator | `false` |
+| `podDisruptionBudget.enabled` | Render a PDB when replicas are greater than 1 | `true` |
 | `service.type` | Service type | `ClusterIP` |
 | `resources.requests.cpu` | CPU request | `500m` |
 | `resources.requests.memory` | Memory request | `1Gi` |

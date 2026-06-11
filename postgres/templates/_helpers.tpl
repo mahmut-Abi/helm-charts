@@ -53,6 +53,17 @@ Secret name.
 {{- end -}}
 
 {{/*
+Create the name of the service account to use.
+*/}}
+{{- define "postgres.serviceAccountName" -}}
+{{- if .Values.serviceAccount.create -}}
+{{- default (include "postgres.fullname" .) .Values.serviceAccount.name -}}
+{{- else -}}
+{{- default "default" .Values.serviceAccount.name -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
 Return the number of PostgreSQL pods to create.
 */}}
 {{- define "postgres.replicaCount" -}}
@@ -68,6 +79,13 @@ Return the number of PostgreSQL replica pods to create in cluster mode.
 */}}
 {{- define "postgres.readReplicaCount" -}}
 {{- sub (int .Values.cluster.replicas) 1 -}}
+{{- end -}}
+
+{{/*
+Read-only service name.
+*/}}
+{{- define "postgres.readOnlyServiceName" -}}
+{{- printf "%s-read" (include "postgres.fullname" . | trunc 58 | trimSuffix "-") | trunc 63 | trimSuffix "-" -}}
 {{- end -}}
 
 {{/*
@@ -122,9 +140,9 @@ Validate cluster-related values.
 {{- if not .Values.auth.replicationUser -}}
 {{- fail "auth.replicationUser is required when cluster.enabled is true" -}}
 {{- end -}}
-{{- if not .Values.auth.replicationPassword -}}
-{{- fail "auth.replicationPassword is required when cluster.enabled is true" -}}
 {{- end -}}
+{{- if and .Values.pdb.enabled .Values.cluster.enabled .Values.pdb.minAvailable .Values.pdb.maxUnavailable -}}
+{{- fail "Set only one of pdb.minAvailable or pdb.maxUnavailable" -}}
 {{- end -}}
 {{- end -}}
 
@@ -133,4 +151,36 @@ Headless service name.
 */}}
 {{- define "postgres.headlessServiceName" -}}
 {{- printf "%s-headless" (include "postgres.fullname" .) | trunc 63 | trimSuffix "-" -}}
+{{- end -}}
+
+{{/*
+Render optional pod scheduling settings shared by PostgreSQL StatefulSets.
+*/}}
+{{- define "postgres.podScheduling" -}}
+{{- with .Values.nodeSelector }}
+nodeSelector:
+  {{- toYaml . | nindent 2 }}
+{{- end }}
+{{- if .Values.affinity }}
+affinity:
+  {{- toYaml .Values.affinity | nindent 2 }}
+{{- else }}
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchLabels:
+              {{- include "postgres.selectorLabels" . | nindent 14 }}
+          topologyKey: kubernetes.io/hostname
+{{- end }}
+{{- with .Values.topologySpreadConstraints }}
+topologySpreadConstraints:
+  {{- toYaml . | nindent 2 }}
+{{- end }}
+{{- with .Values.tolerations }}
+tolerations:
+  {{- toYaml . | nindent 2 }}
+{{- end }}
 {{- end -}}

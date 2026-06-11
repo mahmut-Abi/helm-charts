@@ -1,4 +1,4 @@
-{{- if gt (int .Values.replicaCount) 1 }}
+{{- if and .Values.podDisruptionBudget.enabled (gt (int .Values.replicaCount) 1) }}
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
@@ -6,7 +6,7 @@ metadata:
   labels:
     {{- include "otel.labels" . | nindent 4 }}
 spec:
-  maxUnavailable: 1
+  maxUnavailable: {{ .Values.podDisruptionBudget.maxUnavailable }}
   selector:
     matchLabels:
       {{- include "otel.selectorLabels" . | nindent 6 }}

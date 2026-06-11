@@ -93,6 +93,17 @@ Headless service name.
 {{- end -}}
 
 {{/*
+ServiceAccount name.
+*/}}
+{{- define "mysql.serviceAccountName" -}}
+{{- if .Values.serviceAccount.create -}}
+{{- default (include "mysql.fullname" .) .Values.serviceAccount.name -}}
+{{- else -}}
+{{- default "default" .Values.serviceAccount.name -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
 Replica count for standalone mode.
 */}}
 {{- define "mysql.replicaCount" -}}
@@ -116,9 +127,6 @@ Validate cluster-related values.
 {{- end -}}
 {{- if not .Values.auth.replicationUser -}}
 {{- fail "auth.replicationUser is required when cluster.enabled is true" -}}
-{{- end -}}
-{{- if not .Values.auth.replicationPassword -}}
-{{- fail "auth.replicationPassword is required when cluster.enabled is true" -}}
 {{- end -}}
 {{- end -}}
 {{- end -}}

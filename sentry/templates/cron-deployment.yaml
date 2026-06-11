@@ -23,15 +23,27 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
     spec:
-      automountServiceAccountToken: false
+      serviceAccountName: {{ include "sentry.serviceAccountName" . }}
+      automountServiceAccountToken: {{ .Values.serviceAccount.automountServiceAccountToken }}
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.cron.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.cron.priorityClassName }}
+      priorityClassName: {{ . | quote }}
       {{- end }}
       containers:
         - name: sentry-cron
           image: {{ include "sentry.webImage" . }}
           imagePullPolicy: {{ .Values.image.sentry.pullPolicy }}
+          {{- with .Values.cron.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           command: ["sentry", "run", "taskworker-scheduler"]
           env:
             - name: SENTRY_SECRET_KEY
@@ -44,16 +56,7 @@ spec:
             - name: SENTRY_DB_USER
               value: {{ .Values.postgres.user | quote }}
             - name: SENTRY_DB_PASSWORD
-            {{- if .Values.postgres.password }}
-              value: {{ .Values.postgres.password | quote }}
-            {{- else if .Values.postgres.existingSecret }}
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.postgres.existingSecret }}
-                  key: {{ .Values.postgres.existingSecretKey | default "password" }}
-            {{- else }}
-              value: ""
-            {{- end }}
+              {{- include "sentry.postgresPasswordEnvValue" . | nindent 14 }}
             - name: SENTRY_POSTGRES_HOST
               value: {{ .Values.postgres.host | quote }}
             - name: SENTRY_POSTGRES_PORT
@@ -63,16 +66,7 @@ spec:
             - name: SENTRY_REDIS_PORT
               value: {{ .Values.redis.port | quote }}
             - name: SENTRY_REDIS_PASSWORD
-            {{- if .Values.redis.password }}
-              value: {{ .Values.redis.password | quote }}
-            {{- else if .Values.redis.existingSecret }}
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.redis.existingSecret }}
-                  key: {{ .Values.redis.existingSecretKey | default "password" }}
-            {{- else }}
-              value: ""
-            {{- end }}
+              {{- include "sentry.redisPasswordEnvValue" . | nindent 14 }}
             - name: KAFKA_BOOTSTRAP_SERVERS
               value: {{ .Values.kafka.bootstrapServers | quote }}
             {{- if .Values.snuba.api.enabled }}
@@ -93,24 +87,7 @@ spec:
             - name: SENTRY_FILESTORE_DIR
               value: {{ .Values.filestore.filesystem.path | quote }}
             {{- end }}
-            {{- if eq .Values.filestore.backend "s3" }}
-            {{- if .Values.filestore.s3.accessKey }}
-            - name: SENTRY_FILESTORE_S3_ACCESS_KEY
-              value: {{ .Values.filestore.s3.accessKey | quote }}
-            {{- end }}
-            {{- if .Values.filestore.s3.secretKey }}
-            - name: SENTRY_FILESTORE_S3_SECRET_KEY
-              value: {{ .Values.filestore.s3.secretKey | quote }}
-            {{- end }}
-            - name: SENTRY_FILESTORE_S3_BUCKET_NAME
-              value: {{ .Values.filestore.s3.bucketName | quote }}
-            {{- if .Values.filestore.s3.endpointUrl }}
-            - name: SENTRY_FILESTORE_S3_ENDPOINT_URL
-              value: {{ .Values.filestore.s3.endpointUrl | quote }}
-            {{- end }}
-            - name: SENTRY_FILESTORE_S3_REGION
-              value: {{ .Values.filestore.s3.region | quote }}
-            {{- end }}
+            {{- include "sentry.filestoreS3Env" . | nindent 12 }}
             - name: SENTRY_SYSTEM_URL
               value: {{ .Values.system.url | quote }}
             - name: SENTRY_ADMIN_EMAIL

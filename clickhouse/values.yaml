@@ -12,11 +12,43 @@ imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
 
+serviceAccount:
+  create: false
+  name: ""
+  annotations: {}
+  automountServiceAccountToken: false
+
+networkPolicy:
+  enabled: false
+  policyTypes:
+    - Ingress
+  ingress:
+    - {}
+  egress: []
+
+serviceMonitor:
+  enabled: false
+  labels: {}
+  endpoints:
+    - port: metrics
+      interval: 30s
+      path: /metrics
+
+metrics:
+  # Enables ClickHouse's native Prometheus endpoint and exposes a metrics port.
+  enabled: false
+  port: 9363
+  endpoint: /metrics
+  exposeMetrics: true
+  exposeEvents: true
+  exposeAsynchronousMetrics: true
+  exposeStatusInfo: true
+
 auth:
   # Values used to populate the generated Secret.
   user: default
-  # password: ""  -- must be set explicitly or use existingSecret
-  password: clickhouse
+  # Auto-generated on first install when empty and preserved on upgrades.
+  password: ""
   database: default
   # Set this to use a pre-created Secret instead of rendering secret.yaml.
   # The Secret must contain keys matching secretKeys below.
@@ -35,6 +67,26 @@ service:
   # Used by ClickHouse replicas to exchange data parts in cluster mode.
   interserverHttpPort: 9009
   annotations: {}
+
+configuration:
+  # Keep these values aligned with pod resources and workload concurrency.
+  maxTableSizeToDrop: 0
+  maxPartitionSizeToDrop: 0
+  maxConnections: 4096
+  maxConcurrentQueries: 100
+  maxServerMemoryUsageToRamRatio: 0.9
+  markCacheSize: "4294967296"
+  loggerLevel: information
+
+profiles:
+  default:
+    maxMemoryUsage: "6000000000"
+    useUncompressedCache: 0
+    loadBalancing: random
+    asyncInsert: 1
+    waitForAsyncInsert: 0
+  readonly:
+    maxMemoryUsage: "6000000000"
 
 headlessService:
   annotations: {}
@@ -116,6 +168,18 @@ persistence:
   size: 8Gi
   annotations: {}
 
+persistentVolumeClaimRetentionPolicy:
+  enabled: false
+  whenDeleted: Retain
+  whenScaled: Retain
+
+startupProbe:
+  enabled: true
+  initialDelaySeconds: 10
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 30
+
 volumePermissions:
   enabled: true
   securityContext:
@@ -156,11 +220,15 @@ containerSecurityContext:
     seccompProfile:
       type: RuntimeDefault
 
+priorityClassName: ""
+
 nodeSelector: {}
 
 tolerations: []
 
 affinity: {}
+
+topologySpreadConstraints: []
 
 podAnnotations: {}
 

@@ -2,20 +2,26 @@
 replicaCount: 1
 
 image:
-  # Official MongoDB 8.0 image.
+  # MongoDB 8.0+ currently crashes on Linux 6.19+ kernels; use 7.0 by default
+  # until the upstream TCMalloc compatibility issue is resolved.
   repository: mongo
-  tag: "8.0"
+  tag: "7.0"
   pullPolicy: IfNotPresent
 
 imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
 
+serviceAccount:
+  create: false
+  name: ""
+  annotations: {}
+  automountServiceAccountToken: false
+
 auth:
-  # Change these values before using the chart in production.
   # rootUser must be set when auth is enabled. Common: admin.
   rootUser: admin
-  # rootPassword: ""  -- must be set explicitly or use existingSecret
+  # Auto-generated on first install when empty and preserved on upgrades.
   rootPassword: ""
   # Optional database to create on first init.
   database: ""
@@ -57,11 +63,16 @@ persistence:
     - ReadWriteOnce
   annotations: {}
 
+persistentVolumeClaimRetentionPolicy:
+  enabled: false
+  whenDeleted: Retain
+  whenScaled: Retain
+
 volumePermissions:
   enabled: true
   image:
     repository: mongo
-    tag: "8.0"
+    tag: "7.0"
     pullPolicy: IfNotPresent
   securityContext:
     runAsUser: 0
@@ -99,6 +110,13 @@ livenessProbe:
   timeoutSeconds: 5
   failureThreshold: 6
 
+startupProbe:
+  enabled: true
+  initialDelaySeconds: 10
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 30
+
 podAnnotations: {}
 podLabels: {}
 
@@ -116,11 +134,30 @@ securityContext:
   seccompProfile:
     type: RuntimeDefault
 
+priorityClassName: ""
+
 nodeSelector: {}
 tolerations: []
 affinity: {}
+topologySpreadConstraints: []
 
 updateStrategy:
   type: RollingUpdate
 
 terminationGracePeriodSeconds: 30
+
+serviceMonitor:
+  enabled: false
+  labels: {}
+  endpoints:
+    - port: mongodb
+      interval: 30s
+      path: /metrics
+
+networkPolicy:
+  enabled: false
+  policyTypes:
+    - Ingress
+  ingress:
+    - {}
+  egress: []

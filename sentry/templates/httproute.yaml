@@ -35,14 +35,6 @@ spec:
       backendRefs:
         - name: {{ include "sentry.fullname" . }}-relay
           port: {{ .Values.relay.port }}
-    # Relay-to-relay internal communication
-    - matches:
-        - path:
-            type: RegularExpression
-            value: /api/0/relays/.*
-      backendRefs:
-        - name: {{ include "sentry.fullname" . }}-relay
-          port: {{ .Values.relay.port }}
 ---
 # HTTPRoute: Sentry web (UI + API)
 apiVersion: gateway.networking.k8s.io/v1

@@ -1,0 +1,88 @@
+# High-load production example. Replace StorageClass and Secret names before use.
+serviceAccount:
+  create: true
+  automountServiceAccountToken: false
+
+auth:
+  existingSecret: clickhouse-prod-auth
+
+cluster:
+  enabled: true
+  name: default
+  shards: 2
+  replicasPerShard: 2
+  internalReplication: true
+
+keeper:
+  enabled: true
+  replicas: 3
+  persistence:
+    enabled: true
+    storageClass: premium-rwo
+    size: 50Gi
+  resources:
+    requests:
+      cpu: 1
+      memory: 2Gi
+    limits:
+      cpu: 2
+      memory: 4Gi
+
+persistence:
+  enabled: true
+  storageClass: premium-rwo
+  size: 1Ti
+  accessModes:
+    - ReadWriteOnce
+
+persistentVolumeClaimRetentionPolicy:
+  enabled: true
+  whenDeleted: Retain
+  whenScaled: Retain
+
+resources:
+  requests:
+    cpu: 8
+    memory: 32Gi
+  limits:
+    cpu: 16
+    memory: 64Gi
+
+configuration:
+  maxConnections: 8192
+  maxConcurrentQueries: 300
+  maxServerMemoryUsageToRamRatio: 0.9
+  markCacheSize: "17179869184"
+
+profiles:
+  default:
+    maxMemoryUsage: "48000000000"
+    useUncompressedCache: 0
+    loadBalancing: random
+    asyncInsert: 1
+    waitForAsyncInsert: 0
+  readonly:
+    maxMemoryUsage: "48000000000"
+
+metrics:
+  enabled: true
+
+serviceMonitor:
+  enabled: true
+  labels:
+    release: prometheus
+
+networkPolicy:
+  enabled: true
+  policyTypes:
+    - Ingress
+  ingress:
+    - {}
+
+topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: kubernetes.io/hostname
+    whenUnsatisfiable: ScheduleAnyway
+    labelSelector:
+      matchLabels:
+        app.kubernetes.io/name: clickhouse

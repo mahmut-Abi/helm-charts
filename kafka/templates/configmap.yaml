@@ -17,25 +17,21 @@ data:
     # Listeners
     listeners=PLAINTEXT://0.0.0.0:{{ .Values.service.externalPort }},CONTROLLER://0.0.0.0:{{ .Values.kraft.controllerPort }}
     advertised.listeners=PLAINTEXT://{{ include "kafka.fullname" . }}-${KAFKA_NODE_ID}.{{ include "kafka.headlessServiceName" . }}.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.service.externalPort }},CONTROLLER://{{ include "kafka.fullname" . }}-${KAFKA_NODE_ID}.{{ include "kafka.headlessServiceName" . }}.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.kraft.controllerPort }}
+    {{- if .Values.auth.enabled }}
+    listener.security.protocol.map=PLAINTEXT:SASL_PLAINTEXT,CONTROLLER:SASL_PLAINTEXT
+    {{- else }}
     listener.security.protocol.map=PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+    {{- end }}
     inter.broker.listener.name=PLAINTEXT
     controller.listener.names=CONTROLLER
 
     {{- if .Values.auth.enabled }}
-    # SASL/PLAIN authentication
+    # SASL/PLAIN authentication. JAAS config is appended by the container
+    # entrypoint from Secret-backed files to avoid storing passwords here.
     sasl.enabled.mechanisms=PLAIN
     sasl.mechanism.inter.broker.protocol=PLAIN
     sasl.mechanism.controller.protocol=PLAIN
-    listener.name.plaintext.plain.sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required \
-      username="${KAFKA_INTER_BROKER_USER}" \
-      password="${KAFKA_INTER_BROKER_PASSWORD}" \
-      user_${KAFKA_INTER_BROKER_USER}="${KAFKA_INTER_BROKER_PASSWORD}"{{- range .Values.auth.clientUsers }} \
-      user_{{ .user }}="{{ .password }}"{{- end }};
     listener.name.plaintext.sasl.enabled.mechanisms=PLAIN
-    listener.name.controller.plain.sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required \
-      username="${KAFKA_INTER_BROKER_USER}" \
-      password="${KAFKA_INTER_BROKER_PASSWORD}" \
-      user_${KAFKA_INTER_BROKER_USER}="${KAFKA_INTER_BROKER_PASSWORD}";
     listener.name.controller.sasl.enabled.mechanisms=PLAIN
     {{- end }}
 
@@ -53,10 +49,10 @@ data:
     # Default replication and retention
     num.partitions={{ mul (int .Values.replicas) 3 }}
     default.replication.factor={{ min (int .Values.replicas) 3 }}
-    min.insync.replicas={{ min (sub (int .Values.replicas) 1) 2 }}
+    min.insync.replicas={{ max 1 (min (sub (int .Values.replicas) 1) 2) }}
     offsets.topic.replication.factor={{ min (int .Values.replicas) 3 }}
     transaction.state.log.replication.factor={{ min (int .Values.replicas) 3 }}
-    transaction.state.log.min.isr={{ min (sub (int .Values.replicas) 1) 2 }}
+    transaction.state.log.min.isr={{ max 1 (min (sub (int .Values.replicas) 1) 2) }}
 
     # Networking
     socket.send.buffer.bytes=1048576

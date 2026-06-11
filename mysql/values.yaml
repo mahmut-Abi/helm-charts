@@ -11,9 +11,30 @@ imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
 
+serviceAccount:
+  create: false
+  name: ""
+  annotations: {}
+  automountServiceAccountToken: false
+
+networkPolicy:
+  enabled: false
+  policyTypes:
+    - Ingress
+  ingress:
+    - {}
+  egress: []
+
+serviceMonitor:
+  enabled: false
+  labels: {}
+  endpoints:
+    - port: mysql
+      interval: 30s
+      path: /metrics
+
 auth:
-  # Change these values before using the chart in production.
-  # rootPassword: ""  -- must be set explicitly or use existingSecret
+  # Auto-generated on first install when empty and preserved on upgrades.
   rootPassword: ""
   # Optional application database and user to create on first init.
   database: ""
@@ -26,8 +47,8 @@ auth:
   # Only used when cluster.enabled is true. Replicas connect to the primary
   # with this role for GTID-based replication.
   replicationUser: replicator
-  # replicationPassword: ""  -- must be set explicitly or use existingSecret
-  replicationPassword: replicator-password
+  # Auto-generated on first install when empty and preserved on upgrades.
+  replicationPassword: ""
 
 service:
   type: ClusterIP
@@ -45,6 +66,14 @@ cluster:
   # replicas - 1 pods are replicas.
   replicas: 3
 
+mysql:
+  # Extra mysqld configuration appended to standalone, primary, and replica pods.
+  extraConfiguration: ""
+  # Extra mysqld configuration appended only to the primary pod in cluster mode.
+  primaryExtraConfiguration: ""
+  # Extra mysqld configuration appended only to replica pods in cluster mode.
+  replicaExtraConfiguration: ""
+
 persistence:
   enabled: true
   size: 8Gi
@@ -52,6 +81,11 @@ persistence:
   accessModes:
     - ReadWriteOnce
   annotations: {}
+
+persistentVolumeClaimRetentionPolicy:
+  enabled: false
+  whenDeleted: Retain
+  whenScaled: Retain
 
 volumePermissions:
   enabled: true
@@ -95,6 +129,13 @@ livenessProbe:
   timeoutSeconds: 5
   failureThreshold: 6
 
+startupProbe:
+  enabled: true
+  initialDelaySeconds: 10
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 30
+
 podAnnotations: {}
 podLabels: {}
 
@@ -112,9 +153,12 @@ securityContext:
   seccompProfile:
     type: RuntimeDefault
 
+priorityClassName: ""
+
 nodeSelector: {}
 tolerations: []
 affinity: {}
+topologySpreadConstraints: []
 
 updateStrategy:
   type: RollingUpdate

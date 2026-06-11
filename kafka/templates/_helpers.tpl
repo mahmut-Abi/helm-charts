@@ -22,6 +22,17 @@ Create a default fully qualified app name.
 {{- end -}}
 
 {{/*
+ServiceAccount name.
+*/}}
+{{- define "kafka.serviceAccountName" -}}
+{{- if .Values.serviceAccount.create -}}
+{{- default (include "kafka.fullname" .) .Values.serviceAccount.name -}}
+{{- else -}}
+{{- default "default" .Values.serviceAccount.name -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
 Create chart name and version as used by the chart label.
 */}}
 {{- define "kafka.chart" -}}
@@ -57,6 +68,17 @@ Secret name.
 */}}
 {{- define "kafka.secretName" -}}
 {{- default (printf "%s-auth" (include "kafka.fullname" .) | trunc 63 | trimSuffix "-") .Values.auth.existingSecret -}}
+{{- end -}}
+
+{{/*
+Stable KRaft cluster ID. Kafka expects a 22-character URL-safe UUID string.
+*/}}
+{{- define "kafka.clusterId" -}}
+{{- if .Values.kraft.clusterId -}}
+{{- .Values.kraft.clusterId -}}
+{{- else -}}
+{{- include "kafka.fullname" . | sha256sum | trunc 22 -}}
+{{- end -}}
 {{- end -}}
 
 {{/*
@@ -102,5 +124,8 @@ Validate required values.
 {{- define "kafka.validateValues" -}}
 {{- if lt (int .Values.replicas) 1 -}}
 {{- fail "replicas must be >= 1" -}}
+{{- end -}}
+{{- if and (gt (int .Values.replicas) 1) (eq (mod (int .Values.replicas) 2) 0) -}}
+{{- fail "replicas must be odd when greater than 1 for KRaft quorum safety" -}}
 {{- end -}}
 {{- end -}}

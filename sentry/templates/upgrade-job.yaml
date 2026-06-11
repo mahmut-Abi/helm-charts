@@ -1,22 +1,28 @@
+{{- if .Values.upgrade.enabled }}
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: {{ include "sentry.fullname" . }}-upgrade
+  name: {{ include "sentry.fullname" . }}-upgrade-{{ .Release.Revision }}
   labels:
     {{- include "sentry.labels" . | nindent 4 }}
-  annotations:
-    "helm.sh/hook": post-install,post-upgrade
-    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
 spec:
-  backoffLimit: 0
-  ttlSecondsAfterFinished: 60
+  backoffLimit: {{ .Values.upgrade.backoffLimit }}
+  ttlSecondsAfterFinished: {{ .Values.upgrade.ttlSecondsAfterFinished }}
   template:
     spec:
-      automountServiceAccountToken: false
+      serviceAccountName: {{ include "sentry.serviceAccountName" . }}
+      automountServiceAccountToken: {{ .Values.serviceAccount.automountServiceAccountToken }}
       restartPolicy: Never
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.upgrade.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.upgrade.priorityClassName }}
+      priorityClassName: {{ . | quote }}
       {{- end }}
       initContainers:
         - name: create-db
@@ -30,16 +36,7 @@ spec:
             - name: PGUSER
               value: {{ .Values.postgres.user | quote }}
             - name: PGPASSWORD
-            {{- if .Values.postgres.password }}
-              value: {{ .Values.postgres.password | quote }}
-            {{- else if .Values.postgres.existingSecret }}
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.postgres.existingSecret }}
-                  key: {{ .Values.postgres.existingSecretKey | default "password" }}
-            {{- else }}
-              value: ""
-            {{- end }}
+              {{- include "sentry.postgresPasswordEnvValue" . | nindent 14 }}
           command:
             - /bin/bash
             - -c
@@ -54,19 +51,25 @@ spec:
             - |
               from clickhouse_driver import Client
               from clickhouse_driver.errors import ServerException
+              import os
               import sys
 
               c = Client(
                   host="{{ .Values.clickhouse.host }}",
                   port={{ .Values.clickhouse.tcpPort }},
                   user="{{ .Values.clickhouse.user }}",
-                  password="{{ .Values.clickhouse.password }}",
+                  password=os.environ.get("CLICKHOUSE_PASSWORD", ""),
               )
               db = "{{ .Values.clickhouse.database }}"
+              cluster = "{{ default "default" .Values.clickhouse.clusterName }}"
 
               try:
-                  c.execute(f"CREATE DATABASE IF NOT EXISTS {db} ON CLUSTER 'default'")
-                  print(f"Database '{db}' created on cluster 'default'")
+                  if "{{ .Values.clickhouse.singleNode }}" == "false":
+                      c.execute(f"CREATE DATABASE IF NOT EXISTS {db} ON CLUSTER '{cluster}'")
+                      print(f"Database '{db}' created on cluster '{cluster}'")
+                  else:
+                      c.execute(f"CREATE DATABASE IF NOT EXISTS {db}")
+                      print(f"Database '{db}' created (standalone)")
               except ServerException:
                   c.execute(f"CREATE DATABASE IF NOT EXISTS {db}")
                   print(f"Database '{db}' created (standalone)")
@@ -76,10 +79,17 @@ spec:
                   print(f"ERROR: Failed to create database '{db}'. Check that ClickHouse user '{{ .Values.clickhouse.user }}' has CREATE DATABASE permission.", file=sys.stderr)
                   sys.exit(1)
               print(f"Database '{db}' ready")
+          env:
+            - name: CLICKHOUSE_PASSWORD
+              {{- include "sentry.clickhousePasswordEnvValue" . | nindent 14 }}
       containers:
         - name: upgrade
           image: {{ include "sentry.webImage" . }}
           imagePullPolicy: {{ .Values.image.sentry.pullPolicy }}
+          {{- with .Values.upgrade.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           command: ["sentry", "upgrade", "--noinput"]
           env:
             - name: SENTRY_WEB_HOST
@@ -94,16 +104,7 @@ spec:
             - name: SENTRY_DB_USER
               value: {{ .Values.postgres.user | quote }}
             - name: SENTRY_DB_PASSWORD
-            {{- if .Values.postgres.password }}
-              value: {{ .Values.postgres.password | quote }}
-            {{- else if .Values.postgres.existingSecret }}
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.postgres.existingSecret }}
-                  key: {{ .Values.postgres.existingSecretKey | default "password" }}
-            {{- else }}
-              value: ""
-            {{- end }}
+              {{- include "sentry.postgresPasswordEnvValue" . | nindent 14 }}
             - name: SENTRY_POSTGRES_HOST
               value: {{ .Values.postgres.host | quote }}
             - name: SENTRY_POSTGRES_PORT
@@ -113,16 +114,7 @@ spec:
             - name: SENTRY_REDIS_PORT
               value: {{ .Values.redis.port | quote }}
             - name: SENTRY_REDIS_PASSWORD
-            {{- if .Values.redis.password }}
-              value: {{ .Values.redis.password | quote }}
-            {{- else if .Values.redis.existingSecret }}
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.redis.existingSecret }}
-                  key: {{ .Values.redis.existingSecretKey | default "password" }}
-            {{- else }}
-              value: ""
-            {{- end }}
+              {{- include "sentry.redisPasswordEnvValue" . | nindent 14 }}
             - name: KAFKA_BOOTSTRAP_SERVERS
               value: {{ .Values.kafka.bootstrapServers | quote }}
             {{- if .Values.snuba.api.enabled }}
@@ -134,11 +126,7 @@ spec:
             - name: SENTRY_ADMIN_EMAIL
               value: {{ .Values.user.email | quote }}
             - name: SENTRY_ADMIN_PASSWORD
-              {{- if .Values.user.password }}
-              value: {{ .Values.user.password | quote }}
-            {{- else }}
-              value: ""
-            {{- end }}
+              {{- include "sentry.adminPasswordEnvValue" . | nindent 14 }}
             {{- if .Values.relay.enabled }}
             - name: SENTRY_RELAY_HOST
               value: {{ include "sentry.fullname" . }}-relay.{{ .Release.Namespace }}.svc.cluster.local
@@ -153,3 +141,4 @@ spec:
         - name: sentry-conf
           configMap:
             name: {{ include "sentry.fullname" . }}-sentry
+{{- end }}

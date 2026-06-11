@@ -13,12 +13,17 @@ imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
 
+serviceAccount:
+  create: false
+  name: ""
+  annotations: {}
+  automountServiceAccountToken: false
+
 auth:
   # Enable Redis password authentication.
   enabled: true
-  # Redis password. When auth.enabled is true, set this before installing in production.
-  # password: ""  -- must be set explicitly or use existingSecret
-  password: "change-me"
+  # Auto-generated on first install when empty and preserved on upgrades.
+  password: ""
   # Set this to use a pre-created Secret instead of rendering secret.yaml.
   # The Secret must contain key "redis-password".
   existingSecret: ""
@@ -63,6 +68,14 @@ persistence:
     - ReadWriteOnce
   annotations: {}
 
+persistentVolumeClaimRetentionPolicy:
+  # Enable persistentVolumeClaimRetentionPolicy on the StatefulSet.
+  # When enabled, controls whether PVCs are retained or deleted when the
+  # StatefulSet is deleted or scaled down.
+  enabled: false
+  whenDeleted: Retain
+  whenScaled: Retain
+
 resources:
   requests:
     cpu: 100m
@@ -89,19 +102,48 @@ securityContext:
   seccompProfile:
     type: RuntimeDefault
 
+priorityClassName: ""
+
 nodeSelector: {}
 tolerations: []
 affinity: {}
+topologySpreadConstraints: []
 
 updateStrategy:
   type: RollingUpdate
 
 terminationGracePeriodSeconds: 30
 
+startupProbe:
+  enabled: true
+  initialDelaySeconds: 10
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 30
+
 # Leave empty to use OrderedReady for standalone mode and Parallel for cluster
 # mode. Set explicitly to override either behavior.
 podManagementPolicy: ""
 
+networkPolicy:
+  # Enable to create a NetworkPolicy that restricts traffic.
+  enabled: false
+  policyTypes:
+    - Ingress
+  ingress:
+    - {}
+  egress: []
+
 redis:
   # Extra command-line arguments appended to redis-server.
   extraArgs: []
+
+serviceMonitor:
+  # Enable to create a Prometheus ServiceMonitor for Redis metrics.
+  enabled: false
+  # Labels to add to the ServiceMonitor resource (useful for Prometheus auto-discovery).
+  labels: {}
+  endpoints:
+    - port: redis
+      interval: 30s
+      path: /metrics

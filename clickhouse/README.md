@@ -2,15 +2,17 @@
 
 This chart deploys ClickHouse in standalone mode or cluster mode. Cluster mode can deploy a separate ClickHouse Keeper StatefulSet for replicated tables and distributed DDL.
 
+## Quick Start
+
+```bash
+helm install ch ./clickhouse
+```
+
 ## Modes
 
 ### Standalone
 
 Standalone mode is the default. It creates one ClickHouse StatefulSet, one client Service, one headless Service, one Secret unless `auth.existingSecret` is set, one ConfigMap, and one PVC per pod.
-
-```bash
-helm install ch ./clickhouse
-```
 
 ### Cluster Mode With Standalone Keeper
 
@@ -92,7 +94,7 @@ For a 2 shard x 2 replica deployment, the count should be `4`.
 | Value | Description | Default |
 |---|---|---|
 | `auth.user` | ClickHouse user | `default` |
-| `auth.password` | ClickHouse password | `clickhouse` |
+| `auth.password` | ClickHouse password; empty generates and reuses a Secret value | `""` |
 | `auth.existingSecret` | Use an existing Secret instead of rendering one | `""` |
 | `cluster.enabled` | Enable cluster mode | `false` |
 | `cluster.shards` | Number of shards | `1` |
@@ -101,11 +103,16 @@ For a 2 shard x 2 replica deployment, the count should be `4`.
 | `keeper.replicas` | Number of Keeper pods | `3` |
 | `persistence.enabled` | Create PVCs for ClickHouse data | `true` |
 | `keeper.persistence.enabled` | Create PVCs for Keeper data | `true` |
-| `resources` | ClickHouse CPU/memory requests and limits | requests set, limits empty |
+| `configuration.maxConnections` | ClickHouse `max_connections` server setting | `4096` |
+| `configuration.maxConcurrentQueries` | ClickHouse `max_concurrent_queries` server setting | `100` |
+| `configuration.markCacheSize` | ClickHouse mark cache size in bytes | `4294967296` |
+| `profiles.default.maxMemoryUsage` | Default profile per-query memory limit in bytes | `6000000000` |
+| `metrics.enabled` | Enable native ClickHouse Prometheus endpoint | `false` |
+| `resources` | ClickHouse CPU/memory requests and limits | `{requests: {cpu: 500m, memory: 2Gi}, limits: {cpu: 4, memory: 8Gi}}` |
 
 ## Security Notes
 
-- Change default credentials or use `auth.existingSecret` before production use.
+- Leave `auth.password` empty only if you want Helm to generate and then reuse the chart-managed Secret. For production GitOps, prefer `auth.existingSecret` or an explicit value sourced from a secret manager.
 - ClickHouse and Keeper main containers run as non-root users by default.
 - `volumePermissions` uses a short-lived root initContainer to set PVC ownership, then main containers run non-root.
 - Service account token automount is disabled for ClickHouse server and Keeper pods.

@@ -1,0 +1,164 @@
+# High-load production example. Replace hosts, StorageClass, Secret names, and URLs before use.
+serviceAccount:
+  create: true
+  automountServiceAccountToken: false
+
+auth:
+  existingSecret: sentry-prod-auth
+
+system:
+  url: https://sentry.example.com
+  adminEmail: ops@example.com
+
+postgres:
+  host: sentry-postgres-primary.sentry.svc.cluster.local
+  port: 5432
+  database: sentry
+  user: sentry
+  existingSecret: sentry-postgres-auth
+  existingSecretKey: password
+
+redis:
+  host: sentry-redis.sentry.svc.cluster.local
+  port: 6379
+  existingSecret: sentry-redis-auth
+  existingSecretKey: password
+
+kafka:
+  bootstrapServers: sentry-kafka.sentry.svc.cluster.local:9092
+  autoCreateTopics: false
+  topicCreation:
+    partitions: 24
+    replicationFactor: 3
+
+clickhouse:
+  host: sentry-clickhouse.sentry.svc.cluster.local
+  httpPort: 8123
+  tcpPort: 9000
+  database: sentry
+  user: sentry
+  existingSecret: sentry-clickhouse-auth
+  existingSecretKey: password
+  singleNode: false
+  clusterName: default
+
+filestore:
+  backend: s3
+  s3:
+    bucketName: sentry-artifacts
+    endpointUrl: https://s3.example.com
+    region: us-east-1
+    existingSecret: sentry-filestore-s3
+    existingSecretAccessKeyKey: accessKey
+    existingSecretSecretKeyKey: secretKey
+  filesystem:
+    persistence:
+      enabled: false
+
+web:
+  replicas: 4
+  workers: 12
+  threads: 4
+  harakiri: 60
+  reloadOnRss: 1800
+  resources:
+    requests:
+      cpu: 4
+      memory: 8Gi
+    limits:
+      cpu: 8
+      memory: 16Gi
+
+worker:
+  replicas: 8
+  concurrency: 8
+  resources:
+    requests:
+      cpu: 2
+      memory: 4Gi
+    limits:
+      cpu: 4
+      memory: 8Gi
+
+cron:
+  resources:
+    requests:
+      cpu: 1
+      memory: 2Gi
+    limits:
+      cpu: 2
+      memory: 4Gi
+
+relay:
+  replicas: 4
+  kafkaMessageMaxBytes: 50000000
+  resources:
+    requests:
+      cpu: 2
+      memory: 2Gi
+    limits:
+      cpu: 4
+      memory: 4Gi
+
+snuba:
+  api:
+    replicas: 3
+    resources:
+      requests:
+        cpu: 2
+        memory: 4Gi
+      limits:
+        cpu: 4
+        memory: 8Gi
+  consumer:
+    replicas: 4
+    resources:
+      requests:
+        cpu: 2
+        memory: 4Gi
+      limits:
+        cpu: 4
+        memory: 8Gi
+
+ingestConsumer:
+  replicas: 4
+  resources:
+    requests:
+      cpu: 2
+      memory: 2Gi
+    limits:
+      cpu: 4
+      memory: 4Gi
+
+taskbroker:
+  replicas: 1
+  persistence:
+    enabled: true
+    storageClass: premium-rwo
+    size: 20Gi
+  resources:
+    requests:
+      cpu: 1
+      memory: 1Gi
+    limits:
+      cpu: 2
+      memory: 2Gi
+
+pdb:
+  enabled: true
+  minAvailable: ""
+  maxUnavailable: 1
+
+serviceMonitor:
+  # Enable only after confirming Sentry exposes the expected Prometheus endpoint in your image/config.
+  enabled: false
+  labels:
+    release: prometheus
+
+networkPolicy:
+  enabled: true
+  policyTypes:
+    - Ingress
+  # Replace this allow-all rule with namespaceSelector/podSelector rules for SDK ingress and dependencies.
+  ingress:
+    - {}

@@ -4,20 +4,17 @@ kind: Deployment
 metadata:
   name: {{ include "sentry.fullname" . }}-ingest-consumer
   labels:
-    {{- include "sentry.workerSelectorLabels" . | nindent 4 }}
+    {{- include "sentry.ingestConsumerSelectorLabels" . | nindent 4 }}
     {{- include "sentry.labels" . | nindent 4 }}
-    app.kubernetes.io/component: ingest-consumer
 spec:
   replicas: {{ .Values.ingestConsumer.replicas }}
   selector:
     matchLabels:
-      {{- include "sentry.workerSelectorLabels" . | nindent 6 }}
-      app.kubernetes.io/component: ingest-consumer
+      {{- include "sentry.ingestConsumerSelectorLabels" . | nindent 6 }}
   template:
     metadata:
       labels:
-        {{- include "sentry.workerSelectorLabels" . | nindent 8 }}
-        app.kubernetes.io/component: ingest-consumer
+        {{- include "sentry.ingestConsumerSelectorLabels" . | nindent 8 }}
         {{- with .Values.ingestConsumer.podLabels }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
@@ -26,15 +23,31 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
     spec:
-      automountServiceAccountToken: false
+      serviceAccountName: {{ include "sentry.serviceAccountName" . }}
+      automountServiceAccountToken: {{ .Values.serviceAccount.automountServiceAccountToken }}
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.ingestConsumer.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.ingestConsumer.priorityClassName }}
+      priorityClassName: {{ . | quote }}
+      {{- end }}
+      {{- if and .Values.kafka.autoCreateTopics .Values.kafka.bootstrapServers }}
+      initContainers:
+        {{- include "sentry.kafkaTopicInitContainer" . | nindent 8 }}
       {{- end }}
       containers:
         - name: ingest-consumer
           image: {{ include "sentry.workerImage" . }}
           imagePullPolicy: {{ .Values.image.sentry.pullPolicy }}
+          {{- with .Values.ingestConsumer.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           command: ["sentry", "run", "consumer", "ingest-events", "--consumer-group", "ingest-consumer"]
           env:
             - name: SENTRY_SECRET_KEY
@@ -47,16 +60,7 @@ spec:
             - name: SENTRY_DB_USER
               value: {{ .Values.postgres.user | quote }}
             - name: SENTRY_DB_PASSWORD
-            {{- if .Values.postgres.password }}
-              value: {{ .Values.postgres.password | quote }}
-            {{- else if .Values.postgres.existingSecret }}
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.postgres.existingSecret }}
-                  key: {{ .Values.postgres.existingSecretKey | default "password" }}
-            {{- else }}
-              value: ""
-            {{- end }}
+              {{- include "sentry.postgresPasswordEnvValue" . | nindent 14 }}
             - name: SENTRY_POSTGRES_HOST
               value: {{ .Values.postgres.host | quote }}
             - name: SENTRY_POSTGRES_PORT
@@ -66,16 +70,7 @@ spec:
             - name: SENTRY_REDIS_PORT
               value: {{ .Values.redis.port | quote }}
             - name: SENTRY_REDIS_PASSWORD
-            {{- if .Values.redis.password }}
-              value: {{ .Values.redis.password | quote }}
-            {{- else if .Values.redis.existingSecret }}
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.redis.existingSecret }}
-                  key: {{ .Values.redis.existingSecretKey | default "redis-password" }}
-            {{- else }}
-              value: ""
-            {{- end }}
+              {{- include "sentry.redisPasswordEnvValue" . | nindent 14 }}
             - name: KAFKA_BOOTSTRAP_SERVERS
               value: {{ .Values.kafka.bootstrapServers | quote }}
             - name: SENTRY_CONF

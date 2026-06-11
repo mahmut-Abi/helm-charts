@@ -20,6 +20,5 @@ data:
         - name: bootstrap.servers
           value: "{{ .Values.kafka.bootstrapServers }}"
         - name: message.max.bytes
-          value: "10485760"
-      redis: "redis://{{ if .Values.redis.password }}:{{ .Values.redis.password }}@{{ end }}{{ .Values.redis.host }}:{{ .Values.redis.port }}/1"
+          value: {{ .Values.relay.kafkaMessageMaxBytes | int64 | quote }}
 {{- end }}

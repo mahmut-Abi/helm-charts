@@ -11,6 +11,12 @@ imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
 
+serviceAccount:
+  create: false
+  name: ""
+  annotations: {}
+  automountServiceAccountToken: false
+
 auth:
   # Change these values before using the chart in production.
   defaultUser: admin
@@ -54,6 +60,11 @@ persistence:
     - ReadWriteOnce
   annotations: {}
 
+persistentVolumeClaimRetentionPolicy:
+  enabled: false
+  whenDeleted: Retain
+  whenScaled: Retain
+
 volumePermissions:
   enabled: true
   image:
@@ -96,6 +107,13 @@ livenessProbe:
   timeoutSeconds: 5
   failureThreshold: 6
 
+startupProbe:
+  enabled: true
+  initialDelaySeconds: 10
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 30
+
 podAnnotations: {}
 podLabels: {}
 
@@ -113,14 +131,25 @@ securityContext:
   seccompProfile:
     type: RuntimeDefault
 
+priorityClassName: ""
+
 nodeSelector: {}
 tolerations: []
 affinity: {}
+topologySpreadConstraints: []
 
 updateStrategy:
   type: RollingUpdate
 
 terminationGracePeriodSeconds: 60
+
+networkPolicy:
+  enabled: false
+  policyTypes:
+    - Ingress
+  ingress:
+    - {}
+  egress: []
 
 # Ingress (standard Kubernetes Ingress) for the management UI.
 ingress:
@@ -138,3 +167,13 @@ gateway:
   gatewayName: ""
   gatewayNamespace: ""
   hostname: ""
+
+# Prometheus ServiceMonitor for scraping RabbitMQ management metrics.
+# Requires the prometheus-operator CRDs to be installed in the cluster.
+serviceMonitor:
+  enabled: false
+  labels: {}
+  endpoints:
+    - port: management
+      interval: 30s
+      path: /metrics

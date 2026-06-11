@@ -9,6 +9,11 @@ metadata:
 spec:
   serviceName: {{ include "postgres.headlessServiceName" . }}
   replicas: {{ include "postgres.replicaCount" . }}
+  {{- if and .Values.persistence.enabled .Values.persistentVolumeClaimRetentionPolicy.enabled }}
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: {{ .Values.persistentVolumeClaimRetentionPolicy.whenDeleted }}
+    whenScaled: {{ .Values.persistentVolumeClaimRetentionPolicy.whenScaled }}
+  {{- end }}
   updateStrategy:
     {{- toYaml .Values.updateStrategy | nindent 4 }}
   selector:
@@ -26,13 +31,17 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
     spec:
-      automountServiceAccountToken: false
+      serviceAccountName: {{ include "postgres.serviceAccountName" . }}
+      automountServiceAccountToken: {{ .Values.serviceAccount.automountServiceAccountToken }}
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- with .Values.priorityClassName }}
+      priorityClassName: {{ . | quote }}
+      {{- end }}
       terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
       {{- if .Values.volumePermissions.enabled }}
       initContainers:
@@ -61,7 +70,7 @@ spec:
             {{- toYaml .Values.securityContext | nindent 12 }}
           ports:
             - name: postgres
-              containerPort: 5432
+              containerPort: {{ .Values.containerPorts.postgres }}
               protocol: TCP
           env:
             - name: POSTGRES_USER
@@ -79,35 +88,15 @@ spec:
                 secretKeyRef:
                   name: {{ include "postgres.secretName" . }}
                   key: POSTGRES_DB
-            {{- if .Values.cluster.enabled }}
-            - name: POSTGRES_REPLICATION_USER
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "postgres.secretName" . }}
-                  key: POSTGRES_REPLICATION_USER
-            - name: POSTGRES_REPLICATION_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "postgres.secretName" . }}
-                  key: POSTGRES_REPLICATION_PASSWORD
-            - name: POSTGRES_PRIMARY_HOST
-              value: {{ include "postgres.fullname" . | quote }}
-            - name: POD_NAME
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.name
-            - name: POD_NAMESPACE
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.namespace
-            {{- end }}
-          {{- if .Values.cluster.enabled }}
-          command:
-            - /bin/bash
-            - -ec
           args:
-            - exec /opt/postgres/scripts/entrypoint.sh
-          {{- end }}
+            - postgres
+            {{- range $name, $value := .Values.postgresql.parameters }}
+            - -c
+            - {{ printf "%s=%v" $name $value | quote }}
+            {{- end }}
+            {{- range .Values.postgresql.extraArgs }}
+            - {{ . | quote }}
+            {{- end }}
           volumeMounts:
             - name: data
               mountPath: /var/lib/postgresql/data
@@ -126,13 +115,25 @@ spec:
             {{- end }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
+          {{- if .Values.startupProbe.enabled }}
+          startupProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -ec
+                - pg_isready -h 127.0.0.1 -p {{ .Values.containerPorts.postgres }} -U "$POSTGRES_USER" -d "$POSTGRES_DB"
+            initialDelaySeconds: {{ .Values.startupProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.startupProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.startupProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.startupProbe.failureThreshold }}
+          {{- end }}
           {{- if .Values.readinessProbe.enabled }}
           readinessProbe:
             exec:
               command:
                 - /bin/sh
                 - -ec
-                - pg_isready -h 127.0.0.1 -p {{ .Values.service.port }} -U "$POSTGRES_USER" -d "$POSTGRES_DB"
+                - pg_isready -h 127.0.0.1 -p {{ .Values.containerPorts.postgres }} -U "$POSTGRES_USER" -d "$POSTGRES_DB"
             initialDelaySeconds: {{ .Values.readinessProbe.initialDelaySeconds }}
             periodSeconds: {{ .Values.readinessProbe.periodSeconds }}
             timeoutSeconds: {{ .Values.readinessProbe.timeoutSeconds }}
@@ -144,32 +145,13 @@ spec:
               command:
                 - /bin/sh
                 - -ec
-                - pg_isready -h 127.0.0.1 -p {{ .Values.service.port }} -U "$POSTGRES_USER" -d "$POSTGRES_DB"
+                - pg_isready -h 127.0.0.1 -p {{ .Values.containerPorts.postgres }} -U "$POSTGRES_USER" -d "$POSTGRES_DB"
             initialDelaySeconds: {{ .Values.livenessProbe.initialDelaySeconds }}
             periodSeconds: {{ .Values.livenessProbe.periodSeconds }}
             timeoutSeconds: {{ .Values.livenessProbe.timeoutSeconds }}
             failureThreshold: {{ .Values.livenessProbe.failureThreshold }}
           {{- end }}
-      {{- with .Values.nodeSelector }}
-      nodeSelector:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-      affinity:
-        podAntiAffinity:
-          preferredDuringSchedulingIgnoredDuringExecution:
-            - weight: 100
-              podAffinityTerm:
-                labelSelector:
-                  matchLabels:
-                    {{- include "postgres.selectorLabels" . | nindent 20 }}
-                topologyKey: kubernetes.io/hostname
-        {{- with .Values.affinity }}
-        {{- toYaml . | nindent 8 }}
-        {{- end }}
-      {{- with .Values.tolerations }}
-      tolerations:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
+      {{- include "postgres.podScheduling" . | nindent 6 }}
       volumes:
         - name: tmp
           emptyDir: {}

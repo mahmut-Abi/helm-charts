@@ -23,9 +23,5 @@ spec:
       port: {{ .Values.service.tempoHttpPort }}
       targetPort: tempo-http
       protocol: TCP
-    - name: tempo-metrics
-      port: {{ .Values.service.tempoMetricsPort }}
-      targetPort: tempo-metrics
-      protocol: TCP
   selector:
     {{- include "tempo.selectorLabels" . | nindent 4 }}

@@ -1,0 +1,69 @@
+# High-load production example. Replace StorageClass and Secret names before use.
+serviceAccount:
+  create: true
+  automountServiceAccountToken: false
+
+auth:
+  existingSecret: mysql-prod-auth
+
+cluster:
+  enabled: true
+  replicas: 3
+
+persistence:
+  enabled: true
+  size: 500Gi
+  storageClass: premium-rwo
+  accessModes:
+    - ReadWriteOnce
+
+persistentVolumeClaimRetentionPolicy:
+  enabled: true
+  whenDeleted: Retain
+  whenScaled: Retain
+
+resources:
+  requests:
+    cpu: 4
+    memory: 16Gi
+  limits:
+    cpu: 8
+    memory: 32Gi
+
+mysql:
+  extraConfiguration: |
+    max_connections = 1000
+    innodb_buffer_pool_size = 24G
+    innodb_log_file_size = 4G
+    innodb_flush_log_at_trx_commit = 1
+    sync_binlog = 1
+    binlog_expire_logs_seconds = 604800
+    slow_query_log = ON
+    long_query_time = 1
+  primaryExtraConfiguration: |
+    read_only = OFF
+    super_read_only = OFF
+  replicaExtraConfiguration: |
+    read_only = ON
+    super_read_only = ON
+
+serviceMonitor:
+  # The chart does not deploy mysqld_exporter; enable only after adding an exporter.
+  enabled: false
+  labels:
+    release: prometheus
+
+networkPolicy:
+  enabled: true
+  policyTypes:
+    - Ingress
+  ingress:
+    - {}
+
+topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: kubernetes.io/hostname
+    whenUnsatisfiable: ScheduleAnyway
+    labelSelector:
+      matchLabels:
+        app.kubernetes.io/name: mysql
