@@ -137,11 +137,9 @@ spec:
           startupProbe:
             exec:
               command:
-                - clickhouse-client
-                - --database
-                - default
-                - --query
-                - SELECT 1
+                - sh
+                - -c
+                - echo ruok | nc -w 1 localhost 9181 | grep -q imok
             initialDelaySeconds: {{ .Values.startupProbe.initialDelaySeconds }}
             periodSeconds: {{ .Values.startupProbe.periodSeconds }}
             timeoutSeconds: {{ .Values.startupProbe.timeoutSeconds }}
