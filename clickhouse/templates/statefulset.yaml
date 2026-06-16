@@ -187,11 +187,9 @@ spec:
             periodSeconds: 10
           {{- if .Values.startupProbe.enabled }}
           startupProbe:
-            exec:
-              command:
-                - sh
-                - -c
-                - CLICKHOUSE_DB=default clickhouse-client --query 'SELECT 1'
+            httpGet:
+              path: /ping
+              port: http
             initialDelaySeconds: {{ .Values.startupProbe.initialDelaySeconds }}
             periodSeconds: {{ .Values.startupProbe.periodSeconds }}
             timeoutSeconds: {{ .Values.startupProbe.timeoutSeconds }}
