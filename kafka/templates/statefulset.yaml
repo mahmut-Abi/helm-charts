@@ -143,8 +143,9 @@ spec:
 
               # Format storage directory if it doesn't contain the cluster ID yet
               if [ -f /var/lib/kafka/data/meta.properties ]; then
-                if ! grep -q "cluster.id=${KAFKA_CLUSTER_ID}" /var/lib/kafka/data/meta.properties; then
-                  echo "Error: existing data directory has a different cluster ID. Aborting."
+                STORED_ID=$(sed -n 's/^cluster\.id=//p' /var/lib/kafka/data/meta.properties | tr -d '-' | tr '[:upper:]' '[:lower:]')
+                if [ "$STORED_ID" != "$KAFKA_CLUSTER_ID" ]; then
+                  echo "Error: existing data directory has a different cluster ID (stored: $STORED_ID, expected: $KAFKA_CLUSTER_ID). Aborting."
                   exit 1
                 fi
               else
