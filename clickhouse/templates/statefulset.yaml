@@ -191,7 +191,7 @@ spec:
               command:
                 - sh
                 - -c
-                - unset CLICKHOUSE_DB && clickhouse-client --database default --query 'SELECT 1'
+                - CLICKHOUSE_DB=default clickhouse-client --query 'SELECT 1'
             initialDelaySeconds: {{ .Values.startupProbe.initialDelaySeconds }}
             periodSeconds: {{ .Values.startupProbe.periodSeconds }}
             timeoutSeconds: {{ .Values.startupProbe.timeoutSeconds }}
