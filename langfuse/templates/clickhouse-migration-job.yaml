@@ -80,10 +80,23 @@ spec:
                 CH_BASE=$(echo "${CLICKHOUSE_HOST}" | cut -d. -f1)
                 CH_NS=$(echo "${CLICKHOUSE_HOST}" | cut -d. -f2-)
                 for i in $(seq 0 $((CLICKHOUSE_REPLICA_COUNT - 1))); do
-                  NODE_HOST="${CH_BASE}-${i}.${CH_BASE}-headless.${CH_NS}"
-                  echo "Migrating ClickHouse node ${i}: ${NODE_HOST}..."
-                  CLICKHOUSE_URL="${CLICKHOUSE_SCHEME}://${NODE_HOST}:${CLICKHOUSE_HTTP_PORT}" \
-                    cd /app/packages/shared && sh clickhouse/scripts/up.sh
+                NODE_HOST="${CH_BASE}-${i}.${CH_BASE}-headless.${CH_NS}.svc.cluster.local"
+                echo "Migrating ClickHouse node ${i}: ${NODE_HOST}..."
+                # Create database on this node first
+                node -e "
+                  var h = require(process.env.CLICKHOUSE_SCHEME === 'https' ? 'https' : 'http');
+                  var auth = Buffer.from(process.env.CLICKHOUSE_USER + ':' + process.env.CLICKHOUSE_PASSWORD).toString('base64');
+                  var body = 'CREATE DATABASE IF NOT EXISTS ' + process.env.CLICKHOUSE_DB;
+                  var req = h.request({host: '${NODE_HOST}', port: Number(process.env.CLICKHOUSE_HTTP_PORT), path: '/', method: 'POST', headers: {Authorization: 'Basic ' + auth, 'Content-Length': body.length}, timeout: 10000}, function(r) {
+                    r.resume();
+                    r.on('end', function() { process.exit(0); });
+                  });
+                  req.on('error', function() { process.exit(1); });
+                  req.write(body);
+                  req.end();
+                "
+                CLICKHOUSE_MIGRATION_URL="${CLICKHOUSE_SCHEME}://${NODE_HOST}:${CLICKHOUSE_HTTP_PORT}" \
+                  cd /app/packages/shared && sh clickhouse/scripts/up.sh
                 done
               else
                 cd /app/packages/shared && sh clickhouse/scripts/up.sh
