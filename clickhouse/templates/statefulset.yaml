@@ -189,11 +189,9 @@ spec:
           startupProbe:
             exec:
               command:
-                - clickhouse-client
-                - --database
-                - default
-                - --query
-                - SELECT 1
+                - sh
+                - -c
+                - unset CLICKHOUSE_DB && clickhouse-client --database default --query 'SELECT 1'
             initialDelaySeconds: {{ .Values.startupProbe.initialDelaySeconds }}
             periodSeconds: {{ .Values.startupProbe.periodSeconds }}
             timeoutSeconds: {{ .Values.startupProbe.timeoutSeconds }}
