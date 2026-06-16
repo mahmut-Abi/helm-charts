@@ -76,7 +76,18 @@ spec:
               "
               echo ""
               echo "Running ClickHouse migrations..."
-              cd /app/packages/shared && sh clickhouse/scripts/up.sh
+              if [ "${CLICKHOUSE_CLUSTER_ENABLED}" = "true" ] && [ "${CLICKHOUSE_REPLICA_COUNT}" -gt 1 ]; then
+                CH_BASE=$(echo "${CLICKHOUSE_HOST}" | cut -d. -f1)
+                CH_NS=$(echo "${CLICKHOUSE_HOST}" | cut -d. -f2-)
+                for i in $(seq 0 $((CLICKHOUSE_REPLICA_COUNT - 1))); do
+                  NODE_HOST="${CH_BASE}-${i}.${CH_BASE}-headless.${CH_NS}"
+                  echo "Migrating ClickHouse node ${i}: ${NODE_HOST}..."
+                  CLICKHOUSE_URL="${CLICKHOUSE_SCHEME}://${NODE_HOST}:${CLICKHOUSE_HTTP_PORT}" \
+                    cd /app/packages/shared && sh clickhouse/scripts/up.sh
+                done
+              else
+                cd /app/packages/shared && sh clickhouse/scripts/up.sh
+              fi
               echo ""
               echo "ClickHouse migration completed."
           env:
@@ -98,6 +109,8 @@ spec:
               value: {{ .Values.clickhouse.database | quote }}
             - name: CLICKHOUSE_CLUSTER_ENABLED
               value: {{ .Values.clickhouse.clusterEnabled | quote }}
+            - name: CLICKHOUSE_REPLICA_COUNT
+              value: {{ .Values.clickhouse.replicas | quote }}
             - name: CLICKHOUSE_CLUSTER_NAME
               value: {{ default "default" .Values.clickhouse.clusterName | quote }}
             - name: CLICKHOUSE_MIGRATION_SSL

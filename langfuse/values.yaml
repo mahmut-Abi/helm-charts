@@ -57,6 +57,10 @@ clickhouse:
   clusterEnabled: false
   # Cluster name for ON CLUSTER DDL. Defaults to "default" if not set.
   clusterName: "default"
+  # Number of ClickHouse replicas when clusterEnabled is true.
+  # The migration Job connects to each replica individually to ensure
+  # schema changes reach all nodes (especially with non-replicated tables).
+  replicas: 1
   tlsEnabled: false
   existingSecret: ""
   existingSecretKey: ""
