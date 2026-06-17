@@ -90,7 +90,15 @@ spec:
           securityContext:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-          command: ["sentry", "upgrade", "--noinput"]
+          command:
+            - sh
+            - -c
+            - |
+              sentry upgrade --noinput
+              if [ -n "${SENTRY_ADMIN_EMAIL}" ] && [ -n "${SENTRY_ADMIN_PASSWORD}" ]; then
+                echo "Creating admin user ${SENTRY_ADMIN_EMAIL}..."
+                sentry createuser --email "${SENTRY_ADMIN_EMAIL}" --password "${SENTRY_ADMIN_PASSWORD}" --superuser --no-input 2>/dev/null || true
+              fi
           env:
             - name: SENTRY_WEB_HOST
               value: "0.0.0.0"
