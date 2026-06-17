@@ -620,6 +620,22 @@ ingestConsumer:
   affinity: {}
   extraEnv: []
 
+# Post-process forwarder bridges ingested events from PostgreSQL to the
+# events Kafka topic so snuba-consumer can write them to ClickHouse.
+# Without this, error events land in PostgreSQL but never appear in the UI.
+postProcessForward:
+  errors:
+    enabled: true
+    replicas: 1
+    podLabels: {}
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+
 # Upgrade job for migrations and DB setup.
 upgrade:
   enabled: true

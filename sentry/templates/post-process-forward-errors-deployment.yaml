@@ -1,0 +1,94 @@
+{{- if .Values.postProcessForward.errors.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "sentry.fullname" . }}-post-process-forward-errors
+  labels:
+    {{- include "sentry.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.postProcessForward.errors.replicas }}
+  selector:
+    matchLabels:
+      {{- include "sentry.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "sentry.selectorLabels" . | nindent 8 }}
+        {{- with .Values.postProcessForward.errors.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "sentry.serviceAccountName" . }}
+      automountServiceAccountToken: {{ .Values.serviceAccount.automountServiceAccountToken }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: post-process-forward-errors
+          image: {{ include "sentry.webImage" . }}
+          imagePullPolicy: {{ .Values.image.sentry.pullPolicy }}
+          command:
+            - sentry
+            - run
+            - consumer
+            - post-process-forwarder-errors
+            - "--consumer-group"
+            - "post-process-forwarder"
+            - "--synchronize-commit-log-topic=snuba-commit-log"
+            - "--synchronize-commit-group=snuba-consumers"
+            - "--healthcheck-file-path"
+            - "/tmp/health.txt"
+          env:
+            - name: SENTRY_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "sentry.secretName" . }}
+                  key: SENTRY_SECRET_KEY
+            - name: SENTRY_DB_NAME
+              value: {{ .Values.postgres.database | quote }}
+            - name: SENTRY_DB_USER
+              value: {{ .Values.postgres.user | quote }}
+            - name: SENTRY_DB_PASSWORD
+              value: {{ .Values.postgres.password | quote }}
+            - name: SENTRY_POSTGRES_HOST
+              value: {{ .Values.postgres.host | quote }}
+            - name: SENTRY_POSTGRES_PORT
+              value: {{ .Values.postgres.port | quote }}
+            - name: SENTRY_REDIS_HOST
+              value: {{ .Values.redis.host | quote }}
+            - name: SENTRY_REDIS_PORT
+              value: {{ .Values.redis.port | quote }}
+            - name: SENTRY_REDIS_PASSWORD
+              value: {{ .Values.redis.password | quote }}
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              value: {{ .Values.kafka.bootstrapServers | quote }}
+            - name: CLICKHOUSE_HOST
+              value: {{ .Values.clickhouse.host | quote }}
+            - name: CLICKHOUSE_HTTP_PORT
+              value: {{ .Values.clickhouse.httpPort | quote }}
+            - name: CLICKHOUSE_PORT
+              value: {{ .Values.clickhouse.tcpPort | quote }}
+            - name: CLICKHOUSE_DB
+              value: {{ .Values.clickhouse.database | quote }}
+            - name: CLICKHOUSE_USER
+              value: {{ .Values.clickhouse.user | quote }}
+            - name: CLICKHOUSE_PASSWORD
+              value: {{ .Values.clickhouse.password | quote }}
+            - name: SENTRY_RELAY_HOST
+              value: "relay"
+            - name: SENTRY_RELAY_PORT
+              value: "3000"
+          volumeMounts:
+            - name: config
+              mountPath: /etc/sentry
+              readOnly: true
+          {{- with .Values.postProcessForward.errors.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "sentry.fullname" . }}-sentry
+{{- end }}
