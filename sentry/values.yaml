@@ -293,6 +293,27 @@ relay:
   replicas: 2
   port: 3000
   kafkaMessageMaxBytes: 50000000
+  # Maximum concurrent upstream queries when fetching project state.
+  # Relay's internal default is 5 — raising this lets more projects
+  # fetch state simultaneously after a relay restart.
+  maxConcurrentQueries: 10
+  # Upstream request timeout in seconds. Lower values help prevent
+  # request pileup when the upstream (sentry-web) is under load.
+  queryTimeout: 30
+  # How long relay caches fetched project state in memory (seconds).
+  projectExpiry: 300
+  # Grace period before expired project state is removed (seconds).
+  projectGracePeriod: 60
+  # How long negative lookups (project not found) are cached (seconds).
+  missExpiry: 60
+  redis:
+    # Enable relay-side Redis caching so project state survives relay
+    # restarts. Without this, every relay restart triggers a full re-fetch
+    # of all project state from sentry-web, which compounds the backlog.
+    enabled: false
+    host: ""
+    port: 6379
+    password: ""
   waitForWeb:
     enabled: true
     path: /_health/

@@ -140,6 +140,7 @@ data:
         "organizations:starfish-view": True,
     }
     SENTRY_SELF_HOSTED = True
+    SENTRY_RELAY_PROJECTCONFIG_CACHE = "sentry.relay.projectconfig_cache.redis.RedisProjectConfigCache"
     {{- with .Values.config.extraPython }}
 
     {{ . | nindent 4 }}
