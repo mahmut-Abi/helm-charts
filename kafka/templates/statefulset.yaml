@@ -73,8 +73,34 @@ spec:
       priorityClassName: {{ . | quote }}
       {{- end }}
       terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
-      {{- if .Values.volumePermissions.enabled }}
+      {{- if or .Values.volumePermissions.enabled .Values.metrics.jmxExporter.enabled }}
       initContainers:
+        {{- if .Values.metrics.jmxExporter.enabled }}
+        - name: jmx-exporter
+          image: "{{ .Values.metrics.jmxExporter.image.repository }}:{{ .Values.metrics.jmxExporter.image.tag }}"
+          imagePullPolicy: {{ .Values.metrics.jmxExporter.image.pullPolicy }}
+          command:
+            - /bin/sh
+            - -ec
+          args:
+            - |
+              cp /opt/bitnami/jmx-exporter/jmx_prometheus_javaagent.jar /export/jmx_prometheus_javaagent.jar
+              cat > /export/jmx-config.yaml <<'JMXEOF'
+              lowercaseOutputName: true
+              lowercaseOutputLabelNames: true
+              rules:
+              - pattern: kafka.(.+)<type=(.+), name=(.+)>(.+)
+                name: kafka_$1_$2_$3_$4
+                labels:
+                  broker: "$1"
+              - pattern: java.lang<type=(.+)>(.+)
+                name: java_lang_$1_$2
+              JMXEOF
+          volumeMounts:
+            - name: jmx-exporter
+              mountPath: /export
+        {{- end }}
+        {{- if .Values.volumePermissions.enabled }}
         - name: volume-permissions
           image: "{{ .Values.image.busybox.repository }}:{{ .Values.image.busybox.tag }}"
           imagePullPolicy: {{ .Values.image.busybox.pullPolicy }}
@@ -98,6 +124,7 @@ spec:
             - name: kraft
               mountPath: /var/lib/kafka/kraft
             {{- end }}
+      {{- end }}
       {{- end }}
       containers:
         - name: kafka
@@ -156,6 +183,10 @@ spec:
                   --ignore-formatted
               fi
 
+              {{- if .Values.metrics.jmxExporter.enabled }}
+              export KAFKA_OPTS="${KAFKA_OPTS:-} -javaagent:/opt/kafka/libs/jmx-exporter/jmx_prometheus_javaagent.jar={{ .Values.metrics.jmxExporter.port }}:/opt/kafka/libs/jmx-exporter/jmx-config.yaml"
+              {{- end }}
+
               exec /opt/kafka/bin/kafka-server-start.sh /tmp/server.properties
           ports:
             - name: external
@@ -164,6 +195,11 @@ spec:
             - name: controller
               containerPort: {{ .Values.kraft.controllerPort }}
               protocol: TCP
+            {{- if .Values.metrics.jmxExporter.enabled }}
+            - name: metrics
+              containerPort: {{ .Values.metrics.jmxExporter.port }}
+              protocol: TCP
+            {{- end }}
           volumeMounts:
             - name: data
               mountPath: /var/lib/kafka/data
@@ -178,6 +214,10 @@ spec:
             - name: auth-secret
               mountPath: /etc/kafka/secrets
               readOnly: true
+            {{- end }}
+            {{- if .Values.metrics.jmxExporter.enabled }}
+            - name: jmx-exporter
+              mountPath: /opt/kafka/libs/jmx-exporter
             {{- end }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
@@ -248,6 +288,10 @@ spec:
         - name: auth-secret
           secret:
             secretName: {{ include "kafka.secretName" . }}
+        {{- end }}
+        {{- if .Values.metrics.jmxExporter.enabled }}
+        - name: jmx-exporter
+          emptyDir: {}
         {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:

@@ -239,6 +239,25 @@ kafkaUi:
     gatewayNamespace: ""
     hostname: ""
 
+# JMX Prometheus exporter for Kafka metrics.
+# When enabled, the JMX exporter jar is added as a Java agent
+# and additional ports are exposed on the pod and services.
+metrics:
+  jmxExporter:
+    enabled: false
+    image:
+      repository: bitnami/jmx-exporter
+      tag: "1.4.0"
+      pullPolicy: IfNotPresent
+    port: 9404
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 200m
+        memory: 128Mi
+
 # Prometheus ServiceMonitor for automatic metric scraping.
 serviceMonitor:
   enabled: false

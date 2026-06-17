@@ -140,6 +140,29 @@ spec:
             timeoutSeconds: {{ .Values.startupProbe.timeoutSeconds }}
             failureThreshold: {{ .Values.startupProbe.failureThreshold }}
           {{- end }}
+      {{- if .Values.metrics.exporter.enabled }}
+        - name: redis-exporter
+          image: "{{ .Values.metrics.exporter.image.repository }}:{{ .Values.metrics.exporter.image.tag }}"
+          imagePullPolicy: {{ .Values.metrics.exporter.image.pullPolicy }}
+          ports:
+            - name: metrics
+              containerPort: {{ .Values.metrics.exporter.port }}
+              protocol: TCP
+          env:
+            - name: REDIS_ADDR
+              value: redis://127.0.0.1:{{ .Values.service.port }}
+            {{- if .Values.auth.enabled }}
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "redis.secretName" . }}
+                  key: redis-password
+            {{- end }}
+          resources:
+            {{- toYaml .Values.metrics.exporter.resources | nindent 12 }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+      {{- end }}
       {{- with .Values.priorityClassName }}
       priorityClassName: {{ . | quote }}
       {{- end }}

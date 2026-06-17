@@ -135,7 +135,7 @@ service:
   annotations: {}
 
 serviceMonitor:
-  enabled: false
+  enabled: true
   labels: {}
   endpoints:
     - port: tempo-http

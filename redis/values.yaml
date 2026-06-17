@@ -138,12 +138,29 @@ redis:
   # Extra command-line arguments appended to redis-server.
   extraArgs: []
 
+metrics:
+  exporter:
+    # redis-exporter sidecar — exposes Redis metrics at /metrics.
+    enabled: false
+    image:
+      repository: redis/redis-exporter
+      tag: "v1.68.0"
+      pullPolicy: IfNotPresent
+    port: 9121
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 200m
+        memory: 128Mi
+
 serviceMonitor:
   # Enable to create a Prometheus ServiceMonitor for Redis metrics.
   enabled: false
   # Labels to add to the ServiceMonitor resource (useful for Prometheus auto-discovery).
   labels: {}
   endpoints:
-    - port: redis
+    - port: metrics
       interval: 30s
       path: /metrics

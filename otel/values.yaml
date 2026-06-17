@@ -119,7 +119,7 @@ networkPolicy:
     - Egress
 
 serviceMonitor:
-  enabled: false
+  enabled: true
   labels: {}
   annotations: {}
   interval: 30s

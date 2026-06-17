@@ -15,6 +15,12 @@ spec:
       port: {{ .Values.service.port }}
       targetPort: postgres
       protocol: TCP
+    {{- if .Values.metrics.exporter.enabled }}
+    - name: metrics
+      port: {{ .Values.metrics.exporter.port }}
+      targetPort: metrics
+      protocol: TCP
+    {{- end }}
   selector:
     {{- if .Values.cluster.enabled }}
     {{- include "postgres.primarySelectorLabels" . | nindent 4 }}
@@ -38,7 +44,7 @@ spec:
   type: {{ .Values.readOnlyService.type }}
   ports:
     - name: postgres
-      port: {{ .Values.readOnlyService.port }}
+      port: {{ .Values.service.port }}
       targetPort: postgres
       protocol: TCP
   selector:

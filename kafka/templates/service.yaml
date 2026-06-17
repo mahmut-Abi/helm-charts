@@ -17,6 +17,12 @@ spec:
       port: {{ .Values.kraft.controllerPort }}
       targetPort: controller
       protocol: TCP
+    {{- if .Values.metrics.jmxExporter.enabled }}
+    - name: metrics
+      port: {{ .Values.metrics.jmxExporter.port }}
+      targetPort: metrics
+      protocol: TCP
+    {{- end }}
   selector:
     {{- include "kafka.selectorLabels" . | nindent 4 }}
 ---
@@ -40,5 +46,11 @@ spec:
       {{- if and (gt (int .Values.service.nodePort) 0) (le (int .Values.service.nodePort) 32767) }}
       nodePort: {{ .Values.service.nodePort }}
       {{- end }}
+    {{- if .Values.metrics.jmxExporter.enabled }}
+    - name: metrics
+      port: {{ .Values.metrics.jmxExporter.port }}
+      targetPort: metrics
+      protocol: TCP
+    {{- end }}
   selector:
     {{- include "kafka.selectorLabels" . | nindent 4 }}

@@ -27,7 +27,7 @@ networkPolicy:
   egress: []
 
 serviceMonitor:
-  enabled: false
+  enabled: true
   labels: {}
   endpoints:
     - port: metrics
@@ -36,7 +36,7 @@ serviceMonitor:
 
 metrics:
   # Enables ClickHouse's native Prometheus endpoint and exposes a metrics port.
-  enabled: false
+  enabled: true
   port: 9363
   endpoint: /metrics
   exposeMetrics: true
