@@ -300,8 +300,10 @@ relay:
   # Upstream request timeout in seconds. Lower values help prevent
   # request pileup when the upstream (sentry-web) is under load.
   queryTimeout: 30
-  # How long relay caches fetched project state in memory (seconds).
-  projectExpiry: 300
+  # How long relay caches fetched project state (seconds).
+  # Must >= the web-side projectconfig cache TTL (default 3600) to prevent
+  # cache expiry gaps that cause "deadline exceeded" in relay.
+  projectExpiry: 3600
   # Grace period before expired project state is removed (seconds).
   projectGracePeriod: 60
   # How long negative lookups (project not found) are cached (seconds).

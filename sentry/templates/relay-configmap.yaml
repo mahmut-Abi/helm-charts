@@ -7,21 +7,20 @@ metadata:
     {{- include "sentry.labels" . | nindent 4 }}
 data:
   config.yml: |
+    log_level: debug
     relay:
       mode: managed
       upstream: "http://{{ include "sentry.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.service.port }}"
       host: 0.0.0.0
       port: {{ .Values.relay.port }}
-    http:
-      timeout: {{ .Values.relay.queryTimeout }}
     processing:
       enabled: true
-      max_concurrent_queries: {{ .Values.relay.maxConcurrentQueries }}
       kafka_config:
         - name: bootstrap.servers
           value: "{{ .Values.kafka.bootstrapServers }}"
         - name: message.max.bytes
           value: {{ .Values.relay.kafkaMessageMaxBytes | int64 | quote }}
+      redis: "{{ if .Values.redis.password }}redis://:{{ .Values.redis.password }}@{{ .Values.redis.host }}:{{ .Values.redis.port }}/0{{ else }}redis://{{ .Values.redis.host }}:{{ .Values.redis.port }}/0{{ end }}"
     cache:
       project_expiry: {{ .Values.relay.projectExpiry }}
       project_grace_period: {{ .Values.relay.projectGracePeriod }}
