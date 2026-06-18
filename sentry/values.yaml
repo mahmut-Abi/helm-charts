@@ -1,19 +1,19 @@
 image:
   sentry:
     repository: ghcr.io/getsentry/sentry
-    tag: "26.5.0"
+    tag: "26.6.0"
     pullPolicy: IfNotPresent
   relay:
     repository: ghcr.io/getsentry/relay
-    tag: "26.5.0"
+    tag: "26.6.0"
     pullPolicy: IfNotPresent
   snuba:
     repository: ghcr.io/getsentry/snuba
-    tag: "26.5.0"
+    tag: "26.6.0"
     pullPolicy: IfNotPresent
   taskbroker:
     repository: ghcr.io/getsentry/taskbroker
-    tag: "26.5.0"
+    tag: "26.6.0"
     pullPolicy: IfNotPresent
   # Kafka image used by the topic-creation init container.
   kafka:
