@@ -40,6 +40,8 @@ spec:
         - name: create-clickhouse-db
           image: {{ include "sentry.snubaImage" . }}
           imagePullPolicy: {{ .Values.image.snuba.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.snuba.api.securityContext | nindent 12 }}
           command:
             - python
             - -c

@@ -8,6 +8,8 @@ metadata:
     app.kubernetes.io/component: taskbroker
 spec:
   type: ClusterIP
+  clusterIP: None
+  publishNotReadyAddresses: true
   ports:
     - name: grpc
       port: 50051

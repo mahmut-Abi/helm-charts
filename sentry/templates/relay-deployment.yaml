@@ -40,6 +40,16 @@ spec:
         - name: copy-config
           image: "{{ .Values.image.busybox.repository }}:{{ .Values.image.busybox.tag }}"
           imagePullPolicy: {{ .Values.image.busybox.pullPolicy }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            runAsNonRoot: true
+            runAsUser: 65534
+            runAsGroup: 65534
+            seccompProfile:
+              type: RuntimeDefault
           command:
             - /bin/sh
             - -ec
@@ -47,10 +57,8 @@ spec:
               cp /relay-config/config.yml /etc/relay/config.yml
               if [ -n "${SENTRY_REDIS_PASSWORD:-}" ]; then
                 redis_url="redis://:${SENTRY_REDIS_PASSWORD}@${SENTRY_REDIS_HOST}:${SENTRY_REDIS_PORT}/1"
-              else
-                redis_url="redis://${SENTRY_REDIS_HOST}:${SENTRY_REDIS_PORT}/1"
+                sed -i "s|redis://${SENTRY_REDIS_HOST}:${SENTRY_REDIS_PORT}/0|${redis_url}|" /etc/relay/config.yml
               fi
-              printf '  redis: "%s"\n' "$redis_url" >> /etc/relay/config.yml
           env:
             - name: SENTRY_REDIS_HOST
               value: {{ .Values.redis.host | quote }}
@@ -67,6 +75,8 @@ spec:
         - name: generate-creds
           image: {{ include "sentry.relayImage" . }}
           imagePullPolicy: {{ .Values.image.relay.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.relay.securityContext | nindent 12 }}
           command: ["relay", "credentials", "generate"]
           workingDir: /etc/relay
           volumeMounts:
@@ -76,6 +86,16 @@ spec:
         - name: wait-for-web
           image: "{{ .Values.image.busybox.repository }}:{{ .Values.image.busybox.tag }}"
           imagePullPolicy: {{ .Values.image.busybox.pullPolicy }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            runAsNonRoot: true
+            runAsUser: 65534
+            runAsGroup: 65534
+            seccompProfile:
+              type: RuntimeDefault
           command:
             - /bin/sh
             - -ec

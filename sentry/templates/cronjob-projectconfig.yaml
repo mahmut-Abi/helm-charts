@@ -17,10 +17,20 @@ spec:
           imagePullSecrets:
             {{- toYaml . | nindent 10 }}
           {{- end }}
+          {{- with .Values.cron.podSecurityContext }}
+          securityContext:
+            {{- toYaml . | nindent 10 }}
+          {{- end }}
           containers:
             - name: rebuild
               image: {{ include "sentry.webImage" . }}
               imagePullPolicy: {{ .Values.image.sentry.pullPolicy }}
+              {{- with .Values.cron.securityContext }}
+              securityContext:
+                {{- toYaml . | nindent 14 }}
+              {{- end }}
+              resources:
+                {{- toYaml .Values.cron.resources | nindent 14 }}
               command:
                 - sentry
                 - shell
@@ -49,7 +59,7 @@ spec:
                 - name: SENTRY_DB_USER
                   value: {{ .Values.postgres.user | quote }}
                 - name: SENTRY_DB_PASSWORD
-                  value: {{ .Values.postgres.password | quote }}
+                  {{- include "sentry.postgresPasswordEnvValue" . | nindent 18 }}
                 - name: SENTRY_POSTGRES_HOST
                   value: {{ .Values.postgres.host | quote }}
                 - name: SENTRY_POSTGRES_PORT
@@ -59,7 +69,7 @@ spec:
                 - name: SENTRY_REDIS_PORT
                   value: {{ .Values.redis.port | quote }}
                 - name: SENTRY_REDIS_PASSWORD
-                  value: {{ .Values.redis.password | quote }}
+                  {{- include "sentry.redisPasswordEnvValue" . | nindent 18 }}
                 - name: KAFKA_BOOTSTRAP_SERVERS
                   value: {{ .Values.kafka.bootstrapServers | quote }}
                 - name: SENTRY_RELAY_HOST

@@ -24,10 +24,23 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      {{- with .Values.worker.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.ingestConsumer.priorityClassName }}
+      priorityClassName: {{ . | quote }}
+      {{- end }}
       containers:
         - name: post-process-forward-errors
           image: {{ include "sentry.webImage" . }}
           imagePullPolicy: {{ .Values.image.sentry.pullPolicy }}
+          {{- with .Values.ingestConsumer.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          resources:
+            {{- toYaml .Values.postProcessForward.errors.resources | nindent 12 }}
           command:
             - sentry
             - run
@@ -50,7 +63,7 @@ spec:
             - name: SENTRY_DB_USER
               value: {{ .Values.postgres.user | quote }}
             - name: SENTRY_DB_PASSWORD
-              value: {{ .Values.postgres.password | quote }}
+              {{- include "sentry.postgresPasswordEnvValue" . | nindent 14 }}
             - name: SENTRY_POSTGRES_HOST
               value: {{ .Values.postgres.host | quote }}
             - name: SENTRY_POSTGRES_PORT
@@ -60,7 +73,7 @@ spec:
             - name: SENTRY_REDIS_PORT
               value: {{ .Values.redis.port | quote }}
             - name: SENTRY_REDIS_PASSWORD
-              value: {{ .Values.redis.password | quote }}
+              {{- include "sentry.redisPasswordEnvValue" . | nindent 14 }}
             - name: KAFKA_BOOTSTRAP_SERVERS
               value: {{ .Values.kafka.bootstrapServers | quote }}
             - name: CLICKHOUSE_HOST
@@ -74,7 +87,7 @@ spec:
             - name: CLICKHOUSE_USER
               value: {{ .Values.clickhouse.user | quote }}
             - name: CLICKHOUSE_PASSWORD
-              value: {{ .Values.clickhouse.password | quote }}
+              {{- include "sentry.clickhousePasswordEnvValue" . | nindent 14 }}
             - name: SENTRY_RELAY_HOST
               value: "relay"
             - name: SENTRY_RELAY_PORT

@@ -121,6 +121,7 @@ keeper:
   # StatefulSet; an odd replica count such as 3 or 5 is recommended for quorum.
   enabled: true
   replicas: 3
+  terminationGracePeriodSeconds: 120
   image:
     repository: clickhouse/clickhouse-keeper
     tag: "25.3.6"
@@ -160,6 +161,12 @@ keeper:
     limits:
       cpu: 1
       memory: 1Gi
+  podLabels: {}
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  topologySpreadConstraints: []
 
 persistence:
   enabled: true
@@ -175,6 +182,9 @@ persistentVolumeClaimRetentionPolicy:
   enabled: false
   whenDeleted: Retain
   whenScaled: Retain
+
+pdb:
+  maxUnavailable: 1
 
 startupProbe:
   enabled: true
@@ -212,16 +222,16 @@ podSecurityContext:
   fsGroupChangePolicy: OnRootMismatch
 
 containerSecurityContext:
-    allowPrivilegeEscalation: false
-    capabilities:
-      drop:
-        - ALL
-    readOnlyRootFilesystem: true
-    runAsNonRoot: true
-    runAsUser: 101
-    runAsGroup: 101
-    seccompProfile:
-      type: RuntimeDefault
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 101
+  runAsGroup: 101
+  seccompProfile:
+    type: RuntimeDefault
 
 priorityClassName: ""
 

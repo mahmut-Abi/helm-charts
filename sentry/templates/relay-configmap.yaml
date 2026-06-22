@@ -20,7 +20,7 @@ data:
           value: "{{ .Values.kafka.bootstrapServers }}"
         - name: message.max.bytes
           value: {{ .Values.relay.kafkaMessageMaxBytes | int64 | quote }}
-      redis: "{{ if .Values.redis.password }}redis://:{{ .Values.redis.password }}@{{ .Values.redis.host }}:{{ .Values.redis.port }}/0{{ else }}redis://{{ .Values.redis.host }}:{{ .Values.redis.port }}/0{{ end }}"
+      redis: "redis://{{ .Values.redis.host }}:{{ .Values.redis.port }}/0"
     cache:
       project_expiry: {{ .Values.relay.projectExpiry }}
       project_grace_period: {{ .Values.relay.projectGracePeriod }}
@@ -29,8 +29,5 @@ data:
     redis:
       host: "{{ .Values.relay.redis.host }}"
       port: {{ .Values.relay.redis.port }}
-      {{- if .Values.relay.redis.password }}
-      password: "{{ .Values.relay.redis.password }}"
-      {{- end }}
     {{- end }}
 {{- end }}

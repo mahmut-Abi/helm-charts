@@ -172,6 +172,16 @@ Init container that creates Kafka topics needed by Sentry, Snuba, and taskbroker
 - name: init-kafka-topics
   image: "{{ .Values.image.kafka.repository }}:{{ .Values.image.kafka.tag }}"
   imagePullPolicy: {{ .Values.image.kafka.pullPolicy }}
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    seccompProfile:
+      type: RuntimeDefault
   command:
     - /bin/bash
     - -c
