@@ -84,6 +84,7 @@ data:
       </remote_servers>
       <distributed_ddl>
         <path>{{ .Values.cluster.distributedDdl.path }}</path>
+        <output_mode>{{ .Values.cluster.distributedDdl.outputMode | default "throw" }}</output_mode>
       </distributed_ddl>
       <default_replica_path>{{ .Values.cluster.defaultReplicaPath }}</default_replica_path>
       <default_replica_name>{{ .Values.cluster.defaultReplicaName }}</default_replica_name>

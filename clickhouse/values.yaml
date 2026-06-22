@@ -106,6 +106,9 @@ cluster:
   defaultReplicaName: "{replica}"
   distributedDdl:
     path: /clickhouse/task_queue/ddl
+    # throw: DDL rolls back on any replica failure (default, strictest).
+    # none_status: DDL proceeds, failures logged but not blocking.
+    outputMode: throw
   # Small image used by initContainers to generate per-pod configuration from
   # the StatefulSet ordinal.
   configGeneratorImage:
