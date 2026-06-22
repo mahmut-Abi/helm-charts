@@ -1,0 +1,121 @@
+replicaCount: 1
+
+image:
+  # Official Memcached image repository.
+  repository: memcached
+  # Pin to a stable Memcached tag. Override when you need a specific version.
+  tag: "1.6.37"
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: false
+  name: ""
+  annotations: {}
+  automountServiceAccountToken: false
+
+service:
+  # ClusterIP is appropriate for in-cluster access.
+  type: ClusterIP
+  port: 11211
+  # Optional annotations for the client-facing Service.
+  annotations: {}
+  # Optional annotations for the headless Service used by the StatefulSet.
+  headlessAnnotations: {}
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+memcached:
+  # Memory limit in megabytes (-m flag). Adjust based on expected cache size.
+  memory: 64
+  # Maximum simultaneous connections (-c flag).
+  maxConnections: 1024
+  # Number of threads to use (-t flag). Set to number of available CPU cores.
+  threads: 4
+  # Extra command-line arguments appended to memcached.
+  extraArgs: []
+
+podAnnotations: {}
+podLabels: {}
+
+podSecurityContext:
+  fsGroup: 11211
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: false
+  runAsNonRoot: true
+  runAsUser: 11211
+  runAsGroup: 11211
+  seccompProfile:
+    type: RuntimeDefault
+
+priorityClassName: ""
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+topologySpreadConstraints: []
+
+updateStrategy:
+  type: RollingUpdate
+
+terminationGracePeriodSeconds: 30
+
+startupProbe:
+  enabled: true
+  initialDelaySeconds: 5
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 30
+
+podManagementPolicy: ""
+
+networkPolicy:
+  # Enable to create a NetworkPolicy that restricts traffic.
+  enabled: false
+  policyTypes:
+    - Ingress
+  ingress:
+    - {}
+  egress: []
+
+metrics:
+  exporter:
+    # memcached-exporter sidecar — exposes Memcached metrics at /metrics.
+    enabled: false
+    image:
+      repository: prom/memcached-exporter
+      tag: "v0.15.1"
+      pullPolicy: IfNotPresent
+    port: 9150
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 200m
+        memory: 128Mi
+
+serviceMonitor:
+  # Enable to create a Prometheus ServiceMonitor for Memcached metrics.
+  enabled: false
+  # Labels to add to the ServiceMonitor resource (useful for Prometheus auto-discovery).
+  labels: {}
+  endpoints:
+    - port: metrics
+      interval: 30s
+      path: /metrics

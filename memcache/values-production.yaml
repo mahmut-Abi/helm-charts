@@ -1,0 +1,50 @@
+# Production profile for Memcached.
+#
+# Usage:
+#   helm install memcache ./memcache -f ./memcache/values-production.yaml
+
+replicaCount: 3
+
+image:
+  repository: memcached
+  tag: "1.6.37"
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 11211
+
+memcached:
+  memory: 2048
+  maxConnections: 4096
+  threads: 8
+
+resources:
+  requests:
+    cpu: 500m
+    memory: 2200Mi
+  limits:
+    cpu: 2000m
+    memory: 2200Mi
+
+# Spread pods across nodes for resilience.
+topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: kubernetes.io/hostname
+    whenUnsatisfiable: ScheduleAnyway
+    labelSelector:
+      matchLabels:
+        app.kubernetes.io/name: memcache
+
+# Enable metrics collection.
+metrics:
+  exporter:
+    enabled: true
+
+serviceMonitor:
+  enabled: true
+  labels:
+    release: prometheus
+
+# Use a higher priority to avoid eviction under resource pressure.
+priorityClassName: high-priority

@@ -1,0 +1,17 @@
+Memcached has been deployed.
+
+Release name:
+  {{ .Release.Name }}
+
+Service:
+  {{ include "memcache.fullname" . }}:{{ .Values.service.port }}
+
+Connect from inside the cluster:
+  telnet {{ include "memcache.fullname" . }} {{ .Values.service.port }}
+
+Headless service for StatefulSet pod DNS:
+  {{ include "memcache.headlessServiceName" . }}.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.service.port }}
+
+{{- if .Values.metrics.exporter.enabled }}
+Metrics exporter is enabled on port {{ .Values.metrics.exporter.port }}.
+{{- end }}

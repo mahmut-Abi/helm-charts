@@ -1,0 +1,53 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "memcache.fullname" . }}
+  labels:
+    {{- include "memcache.labels" . | nindent 4 }}
+  {{- with .Values.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - name: memcache
+      port: {{ .Values.service.port }}
+      targetPort: memcache
+      protocol: TCP
+    {{- if .Values.metrics.exporter.enabled }}
+    - name: metrics
+      port: {{ .Values.metrics.exporter.port }}
+      targetPort: metrics
+      protocol: TCP
+    {{- end }}
+  selector:
+    {{- include "memcache.selectorLabels" . | nindent 4 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "memcache.headlessServiceName" . }}
+  labels:
+    {{- include "memcache.labels" . | nindent 4 }}
+  {{- with .Values.service.headlessAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: ClusterIP
+  clusterIP: None
+  publishNotReadyAddresses: true
+  ports:
+    - name: memcache
+      port: {{ .Values.service.port }}
+      targetPort: memcache
+      protocol: TCP
+    {{- if .Values.metrics.exporter.enabled }}
+    - name: metrics
+      port: {{ .Values.metrics.exporter.port }}
+      targetPort: metrics
+      protocol: TCP
+    {{- end }}
+  selector:
+    {{- include "memcache.selectorLabels" . | nindent 4 }}
